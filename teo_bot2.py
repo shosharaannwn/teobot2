@@ -7,6 +7,7 @@ import re
 import asyncio
 import sys
 import aioschedule as scheduler
+import json
 
 client=discord.Client()
 
@@ -22,52 +23,79 @@ async def print_message(message):
 def print_error(error):
     sys.stdout.write("Error :"+error+"\n")
 
+
+day_abbrevs = {
+    'm'  : 'monday',
+    't'  : 'tuesday',
+    'w'  : 'wednesday',
+    'th' : 'thursday',
+    'f'  : 'friday',
+    's'  : 'saturday',
+    'su' : 'sunday',
+    'monday' : 'monday',
+    'tuesday' : 'tuesday',
+    'wednesday' : 'wednesday',
+    'thursday' : 'thursday',
+    'friday' : 'friday',
+    'saturday' : 'saturday',
+    'sunday' : 'sunday',
+    'mon' : 'monday',
+    'tues' : 'tuesday',
+    'tue' : 'tuesday',    
+    'wed' : 'wednesday',
+    'thurs' : 'thursday',
+    'thur' : 'thursday',
+    'thu' : 'thursday',        
+    'fri' : 'friday',
+    'sat' : 'saturday',
+    'sun' : 'sunday',
+}
+
+day_names =  [
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+]
+
+class ScheduleParseError(Exception):
+    pass
+
+def normalize_day(day):
+    day = day.lower()
+    try:
+        return day_abbrevs[day]
+    except IndexError:
+        raise ScheduleParseError(f"Eternal Bot Scheduling Error: Day String {day} associated with message {message} is invalid")
+    
+    
 def read_schedule():
     lines=[]
     lines.append(["Message 1", "W,Th", "hourly"])
     lines.append(["Message 2", "Th,F", "10:30,19:02,19:03,19:04,19:05,19:06,19:07,19:08,19:09,19:10"])
     lines.append(["Message 3", "daily", "19:22,19:23,19:24,19:25,19:26,19:27,19:28,19:29,19:30,19:31"])
-    for i in range(len(lines)):
-        schedstr=re.sub("\s+","",lines[i][1])
-        days=[0,0,0,0,0,0,0] # Initialized array of 0s for booleans representing days of the week
-        if not (re.match("daily|[ MondayTuesWhrFiS,]+", lines[i][1], re.IGNORECASE)):
-            err="Eternal Bot Scheduling Error: Day String "+lines[i][1]+" associated with message "+lines[i][0]+"is invalid"
-            raise ValueError(err)
-        if not (re.match("hourly|[ 0-9:,]+", lines[i][2], re.IGNORECASE)):
-            err="Eternal Bot Scheduling Error: Hour String "+lines[i][2]+" associated with message "+lines[i][0]+"is invalid"
-            raise ValueError(err)
-        if (re.match("daily", lines[i][1], re.IGNORECASE)):
-            days=[1,1,1,1,1,1,1] # Initialize all days to true
+    for line in lines:
+        message, days, times = line
+
+        if days.strip().lower() == 'daily':
+            days_set = set(day_names)
         else:
-            for j in re.split(",", schedstr):
-                if (re.match("M|monday|Mon", j, re.IGNORECASE)):
-                    days[0]=1
-                elif (re.match("T|tuesday|Tues", j, re.IGNORECASE)):
-                    days[1]=1
-                elif (re.match("W|wednesday|wed", j, re.IGNORECASE)):
-                    days[2]=1
-                elif (re.match("Th|thursday|Thurs", j, re.IGNORECASE)):
-                    days[3]=1
-                elif (re.match("F|friday|fri", j, re.IGNORECASE)):
-                    days[4]=1
-                elif (re.match("s|saturday|sat", j, re.IGNORECASE)):
-                    days[5]=1
-                elif (re.match("su|sunday|sun", j, re.IGNORECASE)):
-                    days[6]=1
-                else:
-                    err="Eternal Bot Scheduling Error: Day String "+lines[1]+" associated with message "+lines[0]+"contains an invalid day of the week"
-                    raise ValueError(err)
-        schedstr=re.sub("\s+","",lines[i][2])
+            days_set = set(map(normalize_day, days.strip().split(',')))
+        
         hours=[] # Hours is arbitrary length
-        if (re.match("hourly", schedstr, re.IGNORECASE)):
-            schedstr="00:00,01:00,02:00,03:00,04:00,05:00,06:00,07:00,08:00,09:00,10:00,11:00,12:00,13:00,14:00,15:00,16:00,17:00,18:00,19:00,20:00,21:00,22:00,23:00" # Set a string that makes it easy to handle hourly case like other cases
-        for j in re.split(",", schedstr):
+        times = times.strip()
+        if (re.match("hourly", times, re.IGNORECASE)):
+            times = ','.join([f'{h}:00' for h in range(24)])
+        for j in re.split(",", times):
             if not (re.match("(([0-9]:)|([0-1][0-9]:)|(2[0-3]:))|[0-5][0-9]", j, re.IGNORECASE)):
-                err="Eternal Bot Scheduling Error: Hour "+j+" associated with message "+lines[i][0]+"is invalid"
+                err="Eternal Bot Scheduling Error: Hour "+j+" associated with message "+message+"is invalid"
                 raise ValueError(err)
             else:
                 hours.append(j)
-        schedule.append({"message": lines[i][0], "days": days, "hours": hours})
+        schedule.append({"message": message, "days": days_set, "hours": hours})
 
 def schedule_messages():
     sched_arr={}
@@ -97,11 +125,17 @@ async def update_scheduler():
         await asyncio.sleep(60)
 
 read_schedule()
-schedule_messages()
+# schedule_messages()
+# cron=asyncio.ensure_future(scheduler.run_pending())
+# update=asyncio.ensure_future(update_scheduler())
+# loop=asyncio.get_event_loop()
+# loop.run_forever()
 
-cron=asyncio.ensure_future(scheduler.run_pending())
-update=asyncio.ensure_future(update_scheduler())
-loop=asyncio.get_event_loop()
-loop.run_forever()
+
+for x in schedule:
+    print(x)
+    print()
+    
+#print(json.dumps(schedule, indent=True))
 
 
