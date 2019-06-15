@@ -14,7 +14,8 @@ from google.auth.transport.requests import Request
 import pickle
 import os.path
 
-google_scopes=['https://www.googleapis.com/auth/spreadsheets.readonly']
+google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly',
+               'https://www.googleapis.com/auth/spreadsheets.readonly']
 google_sheet='1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E'
 
 
@@ -31,17 +32,19 @@ def read_sheet():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file('../client_secret.json', google_scopes)
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', google_scopes)
             creds=flow.run_local_server()
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds,token)
     
-    service = build('sheets', 'v4', credentials=creds)
-    
-    sheet=service.spreadsheets()
-#    print (help(sheet.values().get))
-    result=sheet.values().get(spreadsheetId=google_sheet,range="A2:C").execute()
-    lines=result.get('values', [])
+    google_sheets = build('sheets', 'v4', credentials=creds)
+    google_drive = build('drive', 'v3', credentials=creds)
+
+    mtime = google_drive.files().get(fileId=google_sheet, fields="modifiedTime").execute()['modifiedTime']
+    print(f'mtime = {mtime}', file=sys.stdout)
+
+    result = google_sheets.spreadsheets().values().get(spreadsheetId=google_sheet,range="A2:C").execute()
+    lines = result.get('values', [])
     return lines
 #  for row in values:
  #       print ('%s, %s, %s' % (row[0], row[1], row[2]))
@@ -121,8 +124,6 @@ def read_schedule():
         else:
             days = set(map(normalize_day, days.strip().split(',')))
         
-        hours=[] # Hours is arbitrary length
-#        times = times.strip()
         times=re.sub("\s","",times)
         if (re.match("hourly", times, re.IGNORECASE)):
             times = [f'{h}:00' for h in range(24)]
