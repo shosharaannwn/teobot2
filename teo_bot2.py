@@ -8,11 +8,44 @@ import asyncio
 import sys
 import aioschedule as schedule
 import json
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+import pickle
+import os.path
+
+google_scopes=['https://www.googleapis.com/auth/spreadsheets.readonly']
+google_sheet='1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E'
+
 
 g_message_printed = False
 
 client=discord.Client()
 
+def read_sheet():
+    creds = None
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file('../client_secret.json', google_scopes)
+            creds=flow.run_local_server()
+        with open('token.pickle', 'wb') as token:
+            pickle.dump(creds,token)
+    
+    service = build('sheets', 'v4', credentials=creds)
+    
+    sheet=service.spreadsheets()
+#    print (help(sheet.values().get))
+    result=sheet.values().get(spreadsheetId=google_sheet,range="A2:C").execute()
+    lines=result.get('values', [])
+    return lines
+#  for row in values:
+ #       print ('%s, %s, %s' % (row[0], row[1], row[2]))
+        
 async def print_message(message):
     global g_message_printed
     g_message_printed = True
@@ -71,15 +104,16 @@ def normalize_day(day):
     
     
 def read_schedule():
-    lines=[]
+    lines=read_sheet()
     # lines.append(["Message 1", "W,Th", "hourly"])
     # lines.append(["Message 2", "Th,F", "10:30,19:02,19:03,19:04,19:05,19:06,19:07,19:08,19:09,19:10"])
     # lines.append(["Message 3", "daily", "19:22,19:23,19:24,19:25,19:26,19:27,19:28,19:29,19:30,19:31"])
 
-    now=datetime.datetime.now()
-    lines.append(["FOOO", "daily", f"{now.hour}:{now.minute+1},{now.hour}:{now.minute+2},{now.hour}:{now.minute+3},{now.hour}:{now.minute+4},{now.hour}:{now.minute+5}"])
+    #now=datetime.datetime.now()
+    #lines.append(["FOOO", "daily", f"{now.hour}:{now.minute+1},{now.hour}:{now.minute+2},{now.hour}:{now.minute+3},{now.hour}:{now.minute+4},{now.hour}:{now.minute+5}"])
 
     for line in lines:
+        print("In lines loop\n")
         message, days, times = line
 
         if days.strip().lower() == 'daily':
@@ -88,7 +122,8 @@ def read_schedule():
             days = set(map(normalize_day, days.strip().split(',')))
         
         hours=[] # Hours is arbitrary length
-        times = times.strip()
+#        times = times.strip()
+        times=re.sub("\s","",times)
         if (re.match("hourly", times, re.IGNORECASE)):
             times = [f'{h}:00' for h in range(24)]
         else:
@@ -100,6 +135,7 @@ def read_schedule():
         for day in days:
             print(times)
             for time in times:
+                print (f"Scheduled message {message} for {day} at {time}")
                 getattr(schedule.every(), day).at(time).do(print_message, message)
                 
 
@@ -130,9 +166,13 @@ async def update_scheduler():
             schedule.clear()
         await asyncio.sleep(10)
     
+
+#read_sheet()
+
 loop = asyncio.get_event_loop()
 
 read_schedule()
+
 
 loop.create_task(update_scheduler())
 
