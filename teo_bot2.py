@@ -14,14 +14,49 @@ from google.auth.transport.requests import Request
 import pickle
 import os.path
 
-google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly',
-               'https://www.googleapis.com/auth/spreadsheets.readonly']
-google_sheet='1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E'
+# SET THESE VARIABLES FOR YOUR SERVER INSTALLATION
+
+bot_token="NTg4NTExOTMyNjgwNjM0Mzgx.XQ6kNw.054mJRu_0CHDlLD7UBDJI2k3qyU"  # Discord bot authorization token
+log_channel_name="Log Channel" # Discord channel for error messages
+update_channel_name="Update Channel" # Discord channel on which to listen for forced updates
+guild_name="TEO_Bot_Test" # Guild name (Discord server)
+msg_channel_name="teo_bot" # Discord channel on which to send announcements
+google_sheet_token="1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E"
+
+google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly']
+google_sheet=google_sheet_token
 
 
 g_message_printed = False
 
 client=discord.Client()
+sys.stdout.write("wtf")
+
+client.run(bot_token)
+
+def get_channel(guild, name=""):  # Input is a discord Guild object and a string
+	for channel in guild.channels:
+		if channel.name == name:
+			return channel	
+	return None
+
+guild=None
+
+# import pdb; pdb.set_trace()
+
+print(client.guilds)
+
+for g in client.guilds:
+	if g.name==guild_name:
+		guild=g
+		break
+if guild==None:
+	sys.stdout.write("Invalid guild name "+guild_name+"\n")
+	sys.exit(1)
+
+log_channel=get_channel(guild, log_channel_name)
+update_channel=get_channel(guild, update_channel_name)
+msg_channel=get_channel(guild, msg_channel_name)
 
 def read_sheet():
     creds = None
@@ -50,9 +85,11 @@ def read_sheet():
  #       print ('%s, %s, %s' % (row[0], row[1], row[2]))
         
 async def print_message(message):
-    global g_message_printed
-    g_message_printed = True
-    sys.stdout.write("Message :"+message+"\n")
+#    global g_message_printed
+#    g_message_printed = True
+	await msg_channel.send(message)
+#    sys.stdout.write("Message :"+message+"\n")
+	
 
 def print_error(error):
     sys.stdout.write("Error :"+error+"\n")
@@ -143,13 +180,13 @@ def read_schedule():
         
 
 # def schedule_messages():
-#     sched_arr={}
-#     for i in range(len(schedule)):
-#         for d in range(7):
-#             if (schedule[i]["days"][d]==1):
-#                 for h in schedule[i]["hours"]:
-#                     namestr=str(i)+"_"+str(d)+"_"+h
-#                     scheduler.every(d).weekday.at(h).do(print_message, schedule[i]["message"])
+ #    sched_arr={}
+  #   for i in range(len(schedule)):
+   #      for d in range(7):
+    #         if (schedule[i]["days"][d]==1):
+     #            for h in schedule[i]["hours"]:
+      #               namestr=str(i)+"_"+str(d)+"_"+h
+       #              scheduler.every(d).weekday.at(h).do(print_message, schedule[i]["message"])
 #    for i in sched_arr:
  #       cron_sched.add_job(sched_arr[i])
 
@@ -169,6 +206,7 @@ async def update_scheduler():
     
 
 #read_sheet()
+
 
 loop = asyncio.get_event_loop()
 
