@@ -17,8 +17,8 @@ import os.path
 # SET THESE VARIABLES FOR YOUR SERVER INSTALLATION
 
 bot_token="NTg4NTExOTMyNjgwNjM0Mzgx.XQ6kNw.054mJRu_0CHDlLD7UBDJI2k3qyU"  # Discord bot authorization token
-log_channel_name="Log Channel" # Discord channel for error messages
-update_channel_name="Update Channel" # Discord channel on which to listen for forced updates
+log_channel_name="log" # Discord channel for error messages
+update_channel_name="update" # Discord channel on which to listen for forced updates
 guild_name="TEO_Bot_Test" # Guild name (Discord server)
 msg_channel_name="teo_bot" # Discord channel on which to send announcements
 google_sheet_token="1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E"
@@ -27,36 +27,36 @@ google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly', 'https
 google_sheet=google_sheet_token
 
 
-g_message_printed = False
+# g_message_printed = False
 
-client=discord.Client()
-sys.stdout.write("wtf")
+# client=discord.Client()
+# sys.stdout.write("wtf")
 
-client.run(bot_token)
+# client.run(bot_token)
 
-def get_channel(guild, name=""):  # Input is a discord Guild object and a string
-    for channel in guild.channels:
-    	if channel.name == name:
-    		return channel	
-    return None
+# def get_channel(guild, name=""):  # Input is a discord Guild object and a string
+#     for channel in guild.channels:
+#     	if channel.name == name:
+#     		return channel
+#     return None
 
-guild=None
+# guild=None
 
-# import pdb; pdb.set_trace()
+# # import pdb; pdb.set_trace()
 
-print(client.guilds)
+# print(client.guilds)
 
-for g in client.guilds:
-    if g.name==guild_name:
-    	guild=g
-    	break
-if guild==None:
-    sys.stdout.write("Invalid guild name "+guild_name+"\n")
-    sys.exit(1)
+# for g in client.guilds:
+#     if g.name==guild_name:
+#     	guild=g
+#     	break
+# if guild==None:
+#     sys.stdout.write("Invalid guild name "+guild_name+"\n")
+#     sys.exit(1)
 
-log_channel=get_channel(guild, log_channel_name)
-update_channel=get_channel(guild, update_channel_name)
-msg_channel=get_channel(guild, msg_channel_name)
+# log_channel=get_channel(guild, log_channel_name)
+# update_channel=get_channel(guild, update_channel_name)
+# msg_channel=get_channel(guild, msg_channel_name)
 
 def read_sheet():
     creds = None
@@ -205,19 +205,57 @@ async def update_scheduler():
         await asyncio.sleep(10)
     
 
-#read_sheet()
+
+
+
+
+class Bot:
+
+    async def find_guild(self):
+        print('foo')
+        await self.client.wait_until_ready()
+        print('bar')
+        for guild in self.client.guilds:
+            if guild.name==guild_name:
+                print("found guild!", guild)
+                return guild
+        else:
+            sys.stdout.write("Invalid guild name "+guild_name+"\n")
+            sys.exit(1)
+
+    async def find_channel(self, name):
+        guild = await self.guild
+        for channel in guild.channels:
+            if channel.name == name:
+                print("found channel!", name, channel)
+                return channel
+        else:
+            print("didn't find channel!", name)
+            return None
+
+    async def start(self):
+        asyncio.create_task(self.client.start(bot_token))
+        self.guild = asyncio.ensure_future(self.find_guild())
+        self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
+        self.update_channel = asyncio.ensure_future(self.find_channel(update_channel_name))
+        self.msg_channel = asyncio.ensure_future(self.find_channel(msg_channel_name))
+
+    def __init__(self):
+        self.client = discord.Client()
 
 
 loop = asyncio.get_event_loop()
+bot = Bot()
+loop.create_task(bot.start())
+loop.run_forever()
 
-read_schedule()
+#read_sheet()
+#read_schedule()
+#loop.create_task(update_scheduler())
 
-
-loop.create_task(update_scheduler())
-
-while True:
-    loop.run_until_complete(schedule.run_pending())
-    time.sleep(0.1)
+# while True:
+#     loop.run_until_complete(schedule.run_pending())
+#     time.sleep(0.1)
     
 
 
