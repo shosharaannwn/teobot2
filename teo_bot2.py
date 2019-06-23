@@ -35,10 +35,10 @@ sys.stdout.write("wtf")
 client.run(bot_token)
 
 def get_channel(guild, name=""):  # Input is a discord Guild object and a string
-	for channel in guild.channels:
-		if channel.name == name:
-			return channel	
-	return None
+    for channel in guild.channels:
+    	if channel.name == name:
+    		return channel	
+    return None
 
 guild=None
 
@@ -47,12 +47,12 @@ guild=None
 print(client.guilds)
 
 for g in client.guilds:
-	if g.name==guild_name:
-		guild=g
-		break
+    if g.name==guild_name:
+    	guild=g
+    	break
 if guild==None:
-	sys.stdout.write("Invalid guild name "+guild_name+"\n")
-	sys.exit(1)
+    sys.stdout.write("Invalid guild name "+guild_name+"\n")
+    sys.exit(1)
 
 log_channel=get_channel(guild, log_channel_name)
 update_channel=get_channel(guild, update_channel_name)
@@ -87,9 +87,9 @@ def read_sheet():
 async def print_message(message):
 #    global g_message_printed
 #    g_message_printed = True
-	await msg_channel.send(message)
+    await msg_channel.send(message)
 #    sys.stdout.write("Message :"+message+"\n")
-	
+    
 
 def print_error(error):
     sys.stdout.write("Error :"+error+"\n")
