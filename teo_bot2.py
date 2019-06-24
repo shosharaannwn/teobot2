@@ -85,10 +85,11 @@ def read_sheet():
 #  for row in values:
  #       print ('%s, %s, %s' % (row[0], row[1], row[2]))
         
-def print_message(message, bot):
+async def print_message(message, bot):
 #    global g_message_printed
 #    g_message_printed = True
-     asyncio.create_task(bot.send(message))
+#     asyncio.create_task(bot.send(message))
+     await bot.send(message)
      sys.stdout.write("Message :"+message+"\n")
     
 
@@ -175,7 +176,7 @@ def read_schedule():
             print(times)
             for time in times:
                 print (f"Scheduled message {message} for {day} at {time}")
-                getattr(schedule.every(), day).at(time).do(print_message, message)
+                getattr(schedule.every(), day).at(time).do(print_message, message, bot)
                 
 
         
@@ -225,11 +226,10 @@ class Bot:
             sys.stdout.write("Invalid guild name "+guild_name+"\n")
             sys.exit(1)
 
-    async def send(message):
-    #    global g_message_printed
-    #    g_message_printed = True
-        await self.msg_channel.send(message)
+    async def send(self, message):
         sys.stdout.write("In bot send for Message :"+message+"\n")
+        channel=await self.msg_channel
+        await channel.send(message)
 
     async def find_channel(self, name):
         guild = await self.guild
@@ -252,15 +252,25 @@ class Bot:
         self.client = discord.Client()
 
 
+
+async def run_schedule():
+    while True:
+        await schedule.run_pending()
+
 loop = asyncio.get_event_loop()
 
 #read_sheet()
-read_schedule()
-loop.create_task(update_scheduler())
-
 bot = Bot()
 loop.create_task(bot.start())
+
+read_schedule()
+loop.create_task(update_scheduler())
+loop.create_task(run_schedule())
+
 loop.run_forever()
+#cron=asyncio.ensure_future(scheduler.run_pending())
+#update=asyncio.ensure_future(update_scheduler())
+#loop.run_forever()
 
 # while True:
 #     loop.run_until_complete(schedule.run_pending())
@@ -269,8 +279,6 @@ loop.run_forever()
 
 
 # schedule_messages()
-# cron=asyncio.ensure_future(scheduler.run_pending())
-# update=asyncio.ensure_future(update_scheduler())
 # loop=asyncio.get_event_loop()
 # loop.run_forever()
 
