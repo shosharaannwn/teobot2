@@ -85,11 +85,11 @@ def read_sheet():
 #  for row in values:
  #       print ('%s, %s, %s' % (row[0], row[1], row[2]))
         
-async def print_message(message, bot):
+def print_message(message, bot):
 #    global g_message_printed
 #    g_message_printed = True
-    await bot.send(message)
-#    sys.stdout.write("Message :"+message+"\n")
+     asyncio.create_task(bot.send(message))
+     sys.stdout.write("Message :"+message+"\n")
     
 
 def print_error(error):
@@ -229,7 +229,7 @@ class Bot:
     #    global g_message_printed
     #    g_message_printed = True
         await self.msg_channel.send(message)
-    #    sys.stdout.write("Message :"+message+"\n")
+        sys.stdout.write("In bot send for Message :"+message+"\n")
 
     async def find_channel(self, name):
         guild = await self.guild
