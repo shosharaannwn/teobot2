@@ -26,6 +26,7 @@ google_sheet_token="1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E"
 google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly']
 google_sheet=google_sheet_token
 
+bot=None
 
 # g_message_printed = False
 
@@ -84,10 +85,10 @@ def read_sheet():
 #  for row in values:
  #       print ('%s, %s, %s' % (row[0], row[1], row[2]))
         
-async def print_message(message):
+async def print_message(message, bot):
 #    global g_message_printed
 #    g_message_printed = True
-    await msg_channel.send(message)
+    await bot.send(message)
 #    sys.stdout.write("Message :"+message+"\n")
     
 
@@ -199,7 +200,8 @@ def read_schedule():
 async def update_scheduler():
     while True:
         sys.stdout.write("Second loop actually ran!!\n")
-        if g_message_printed:
+        now=datetime.datetime.now()
+        if (now.minute==0 and now.hour==0):
             sys.stdout.write("Clearing schedule...\n")
             schedule.clear()
         await asyncio.sleep(10)
@@ -223,6 +225,12 @@ class Bot:
             sys.stdout.write("Invalid guild name "+guild_name+"\n")
             sys.exit(1)
 
+    async def send(message):
+    #    global g_message_printed
+    #    g_message_printed = True
+        await self.msg_channel.send(message)
+    #    sys.stdout.write("Message :"+message+"\n")
+
     async def find_channel(self, name):
         guild = await self.guild
         for channel in guild.channels:
@@ -245,13 +253,14 @@ class Bot:
 
 
 loop = asyncio.get_event_loop()
+
+#read_sheet()
+read_schedule()
+loop.create_task(update_scheduler())
+
 bot = Bot()
 loop.create_task(bot.start())
 loop.run_forever()
-
-#read_sheet()
-#read_schedule()
-#loop.create_task(update_scheduler())
 
 # while True:
 #     loop.run_until_complete(schedule.run_pending())
