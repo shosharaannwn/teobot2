@@ -24,6 +24,7 @@ update_channel_name="update" # Discord channel on which to listen for forced upd
 guild_name="TEO_Bot_Test" # Guild name (Discord server)
 msg_channel_name="teo_bot" # Discord channel on which to send announcements
 google_sheet_token="1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E"
+#google_sheet_token="1BLIA28zqbCDtin1VhUIB3hCE9swBugn-_6qcaNBpXfw"
 token_path="token.pickle"
 json_creds_file="credentials.json"
 
@@ -75,11 +76,17 @@ day_names =  [
 google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly']
 google_sheet=google_sheet_token
 bot=None  # Discord bot 
-last_mtime=None # Google sheet last modified time
+last_mtime=None # Global for google sheet last modified time
+last_update=None # Global for scheduler last update day
 
+try:
+    lfh=open(sys.argv[1], "w")
+except:
+    lfh=sys.stdout
 
 # Reads a google sheet and sets the scheduler accordingly
 def read_sheet():
+    global last_mtime
     creds = None
     if os.path.exists(token_path):
         with open(token_path, 'rb') as token:
@@ -97,10 +104,12 @@ def read_sheet():
     google_drive = build('drive', 'v3', credentials=creds)
 
     mtime = google_drive.files().get(fileId=google_sheet, fields="modifiedTime").execute()['modifiedTime']
-#    if last_mtime is None:
- #       last_mtime=cur_mtime
-    print(f'mtime = {mtime}', file=sys.stdout)
-
+    if ((last_mtime is None) or (last_mtime != mtime)):
+        last_mtime=mtime
+        print(f'Set new sheet modification time as {mtime}\n', file=lfh)
+    else:
+        return None # Don't need to read the sheet and update the scheduler
+#    print(f'Sheet modficiation time = {mtime}', file=lfh)
     result = google_sheets.spreadsheets().values().get(spreadsheetId=google_sheet,range="A2:C").execute()
     lines = result.get('values', [])
     return lines
@@ -115,11 +124,11 @@ async def print_message(message, bot):
     message=re.sub("\{\$TIME\}", now.strftime("%I:%M %p %Z"), message)
     message=re.sub("\{\$DATE\}", now.strftime("%A %B %d, %Y"), message)
     await bot.send(message)
-    sys.stdout.write("Message :"+message+"\n")
+    print(f"Message : {message}\n", file=lfh)
     
 
 def print_error(error):
-    sys.stdout.write("Error :"+error+"\n")
+    print(f"Error : {error}\n", file=lfh)
 
 
 class ScheduleParseError(Exception):
@@ -134,12 +143,16 @@ def normalize_day(day):
     
     
 def read_schedule():
+    global last_update
     lines=read_sheet()
+    if lines is None:
+        return # Nothing to do, no need to update scheduler.
+    schedule.clear() # Clear scheduler
     #now=datetime.datetime.now()
     #lines.append(["FOOO", "daily", f"{now.hour}:{now.minute+1},{now.hour}:{now.minute+2},{now.hour}:{now.minute+3},{now.hour}:{now.minute+4},{now.hour}:{now.minute+5}"])
 
     for line in lines:
-        print("In lines loop\n")
+#        print("In lines loop\n")
         message, days, times = line
         days=re.sub("\s","", days)
         if days.lower() == 'daily':
@@ -157,21 +170,26 @@ def read_schedule():
                 raise ScheduleParseError(f"Eternal Bot Scheduling Error: Hour {time} associated with message {message} is invalid")
 
         for day in days:
-            print(times)
+            print(times, file=lfh)
             for time in times:
-#                print (f"Scheduled message {message} for {day} at {time}")
+                print(f"Scheduled message {message} for {day} at {time}", file=lfh)
                 getattr(schedule.every(), day).at(time).do(print_message, message, bot)
                 
+        last_update=datetime.datetime.now().strftime("%D")
 
 
 # Event loop to listen for manual update request or to check for updates once a day
 async def update_scheduler(bot):
+    global last_update
     while True:
-        sys.stdout.write("Second loop actually ran!!\n")
-        now=datetime.datetime.now()
-        if (now.minute==0 and now.hour==0):
-            sys.stdout.write("Clearing schedule...\n")
-            schedule.clear()
+        print(f"Second loop actually ran!!\n", file=lfh)
+        now=datetime.datetime.now().strftime('%D')
+        if last_update != now:
+            last_update = now
+            print(f"Updating sheet for day {last_update}\n", file=lfh)
+            read_schedule()
+#            sys.stdout.write("Clearing schedule...\n")
+ #           schedule.clear()
         await asyncio.sleep(10)
     
 
@@ -179,12 +197,12 @@ async def update_scheduler(bot):
 class Bot:
 
     async def find_guild(self):
-        print('foo')
+#        print('foo')
         await self.client.wait_until_ready()
-        print('bar')
+ #       print('bar')
         for guild in self.client.guilds:
             if guild.name==guild_name:
-                print("found guild!", guild)
+  #              print("found guild!", guild)
                 return guild
         else:
             sys.stdout.write("Invalid guild name "+guild_name+"\n")
@@ -199,10 +217,10 @@ class Bot:
         guild = await self.guild
         for channel in guild.channels:
             if channel.name == name:
-                print("found channel!", name, channel)
+   #             print("found channel!", name, channel)
                 return channel
         else:
-            print("didn't find channel!", name)
+    #        print("didn't find channel!", name)
             return None
 
     async def start(self):
