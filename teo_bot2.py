@@ -141,7 +141,6 @@ def normalize_day(day):
     except IndexError:
         raise ScheduleParseError(f"Eternal Bot Scheduling Error: Day String {day} associated with message {message} is invalid")
     
-    
 def read_schedule():
     global last_update
     lines=read_sheet()
@@ -179,19 +178,20 @@ def read_schedule():
 
 
 # Event loop to listen for manual update request or to check for updates once a day
-async def update_scheduler(bot):
+async def run_schedule(bot):
     global last_update
     while True:
-        print(f"Second loop actually ran!!\n", file=lfh)
+        await schedule.run_pending()
+#        print(f"Second loop actually ran!!\n", file=lfh)
         now=datetime.datetime.now().strftime('%D')
         if last_update != now:
             last_update = now
             print(f"Updating sheet for day {last_update}\n", file=lfh)
             read_schedule()
+ #           print(f"larry's dumb print\n", file=lfh)
 #            sys.stdout.write("Clearing schedule...\n")
  #           schedule.clear()
-        await asyncio.sleep(10)
-    
+        await asyncio.sleep(1)    
 
 # Discord Bot sublcass
 class Bot:
@@ -235,9 +235,10 @@ class Bot:
 
 
 # Async function to run the schedule (required for asyncio to work properly)
-async def run_schedule():
-    while True:
-        await schedule.run_pending()
+#async def run_schedule():
+ #   while True:
+  #      await schedule.run_pending()
+   #     await asyncio.sleep(1)
 
 
 
@@ -247,8 +248,9 @@ bot = Bot()
 loop.create_task(bot.start())
 
 read_schedule()
-loop.create_task(update_scheduler(bot))
-loop.create_task(run_schedule())
+#loop.create_task(update_scheduler(bot))
+loop.create_task(run_schedule(bot))
+#loop.create_task(larrys_silly_function())
 
 loop.run_forever()
 
