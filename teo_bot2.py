@@ -21,10 +21,12 @@ import os.path
 bot_token="NTg4NTExOTMyNjgwNjM0Mzgx.XQ6kNw.054mJRu_0CHDlLD7UBDJI2k3qyU"  # Discord bot authorization token
 log_channel_name="log" # Discord channel for error messages
 update_channel_name="update" # Discord channel on which to listen for forced updates
-guild_name="TEO_Bot_Test" # Guild name (Discord server)
-msg_channel_name="teo_bot" # Discord channel on which to send announcements
-google_sheet_token="1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E"
-#google_sheet_token="1BLIA28zqbCDtin1VhUIB3hCE9swBugn-_6qcaNBpXfw"
+guild_name="The Eternal Order" # Guild name (Discord server)
+#guild_name="TEO_Bot_Test"
+#msg_channel_name="teo_bot" # Discord channel on which to send announcements
+msg_channel_name="the-eternal-order"
+#google_sheet_token="1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E"
+google_sheet_token="1BLIA28zqbCDtin1VhUIB3hCE9swBugn-_6qcaNBpXfw"
 token_path="token.pickle"
 json_creds_file="credentials.json"
 
@@ -184,7 +186,7 @@ async def run_schedule(bot):
         await schedule.run_pending()
 #        print(f"Second loop actually ran!!\n", file=lfh)
         now=datetime.datetime.now().strftime('%D')
-        if last_update != now:
+        if ((last_update is None) or (last_update != now)):
             last_update = now
             print(f"Updating sheet for day {last_update}\n", file=lfh)
             read_schedule()
@@ -202,7 +204,7 @@ class Bot:
  #       print('bar')
         for guild in self.client.guilds:
             if guild.name==guild_name:
-  #              print("found guild!", guild)
+                print("found guild!", guild)
                 return guild
         else:
             sys.stdout.write("Invalid guild name "+guild_name+"\n")
@@ -217,17 +219,17 @@ class Bot:
         guild = await self.guild
         for channel in guild.channels:
             if channel.name == name:
-   #             print("found channel!", name, channel)
+                print("found channel!", name, channel)
                 return channel
         else:
-    #        print("didn't find channel!", name)
+            print("didn't find channel!", name)
             return None
 
     async def start(self):
         asyncio.create_task(self.client.start(bot_token))
         self.guild = asyncio.ensure_future(self.find_guild())
-        self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
-        self.update_channel = asyncio.ensure_future(self.find_channel(update_channel_name))
+#        self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
+ #       self.update_channel = asyncio.ensure_future(self.find_channel(update_channel_name))
         self.msg_channel = asyncio.ensure_future(self.find_channel(msg_channel_name))
 
     def __init__(self):
@@ -247,7 +249,7 @@ loop = asyncio.get_event_loop()
 bot = Bot()
 loop.create_task(bot.start())
 
-read_schedule()
+#read_schedule()
 #loop.create_task(update_scheduler(bot))
 loop.create_task(run_schedule(bot))
 #loop.create_task(larrys_silly_function())
