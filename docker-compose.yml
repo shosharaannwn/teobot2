@@ -1,0 +1,13 @@
+version: '3.7'
+services:
+  teobot:
+    build: .
+    restart: unless-stopped
+    secrets:
+      - bot_token
+      - google_sheet_token
+secrets:
+  bot_token:
+    file: ./bot_token
+  google_sheet_token:
+    file: ./google_sheet_token

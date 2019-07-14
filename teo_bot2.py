@@ -18,15 +18,20 @@ import os.path
 
 ####SET THESE VARIABLES FOR YOUR SERVER INSTALLATION
 
-bot_token="NTg4NTExOTMyNjgwNjM0Mzgx.XQ6kNw.054mJRu_0CHDlLD7UBDJI2k3qyU"  # Discord bot authorization token
+with open('/var/run/secrets/bot_token', 'r') as f:
+    # Discord bot authorization token
+    bot_token = f.read().strip()
+
 log_channel_name="log" # Discord channel for error messages
 update_channel_name="update" # Discord channel on which to listen for forced updates
 guild_name="The Eternal Order" # Guild name (Discord server)
 #guild_name="TEO_Bot_Test"
 #msg_channel_name="teo_bot" # Discord channel on which to send announcements
 msg_channel_name="the-eternal-order"
-#google_sheet_token="1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E"
-google_sheet_token="1BLIA28zqbCDtin1VhUIB3hCE9swBugn-_6qcaNBpXfw"
+
+with open('/var/run/secrets/google_sheet_token', 'r') as f:
+    google_sheet_token = f.read().strip()
+
 token_path="token.pickle"
 json_creds_file="credentials.json"
 
