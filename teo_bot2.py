@@ -199,7 +199,7 @@ def normalize_day(day):
     except IndexError:
         raise ScheduleParseError(f"Eternal Bot Scheduling Error: Day String {day} associated with message {message} is invalid")
     
-def read_schedule():
+def read_schedule(bot):
     global last_update
     lines=read_sheet()
     if lines is None:
@@ -243,7 +243,7 @@ async def run_schedule(bot):
         if ((last_update is None) or (last_update != now)):
             last_update = now
             print(f"Updating sheet for day {last_update}\n")
-            read_schedule()
+            read_schedule(bot)
         await asyncio.sleep(1)    
 
 # Discord Bot sublcass
