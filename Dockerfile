@@ -10,7 +10,7 @@ COPY teo_bot2.py /
 
 RUN adduser -D teobot
 
-ENTRYPOINT su teobot -c /teo_bot2.py
+ENTRYPOINT /teo_bot2.py
 
 
 

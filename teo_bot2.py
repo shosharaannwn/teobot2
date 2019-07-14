@@ -32,9 +32,8 @@ msg_channel_name="the-eternal-order"
 with open('/var/run/secrets/google_sheet_token', 'r') as f:
     google_sheet_token = f.read().strip()
 
-token_path="token.pickle"
-json_creds_file="credentials.json"
-
+token_path="/var/google_sheet_pickle/pickle"
+json_creds_file="/var/run/secrets/google_sheet_credentials"
 
 ################
 
@@ -86,10 +85,14 @@ bot=None  # Discord bot
 last_mtime=None # Global for google sheet last modified time
 last_update=None # Global for scheduler last update day
 
-try:
+if len(sys.argv) >= 2:
     lfh=open(sys.argv[1], "w")
-except:
+else:
     lfh=sys.stdout
+
+
+import getpass
+print("running as uid", os.getuid(), "i.e.", getpass.getuser(), file=lfh)
 
 # Reads a google sheet and sets the scheduler accordingly
 def read_sheet():
@@ -100,10 +103,14 @@ def read_sheet():
             creds = pickle.load(token)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
+            print("refreshing creds", file=lfh)
             creds.refresh(Request())
         else:
+            print("doing InstalledAppFlow", file=lfh)
+            raise NotImplementedError
             flow = InstalledAppFlow.from_client_secrets_file(json_creds_file, google_scopes)
             creds=flow.run_local_server()
+        sys.stdout.flush()
         with open(token_path, 'wb') as token:
             pickle.dump(creds,token)
     
