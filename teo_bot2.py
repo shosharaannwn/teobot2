@@ -1,39 +1,79 @@
 #!/usr/bin/python3
 
+import os
+import sys
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--logfile", "-l")
+parser.add_argument("--flow", action='store_true', help="just do OAuth flow and then exit")
+args = parser.parse_args()
+
+if args.logfile:
+    logfile = open(args.logfile, 'a')
+    sys.stdout = logfile
+    sys.stderr = logfile
+
+if sys.platform == 'darwin':
+    # this is so ctypes will load the right libcrypto
+    dyld_library_path = os.environ.get('DYLD_LIBRARY_PATH', '').split(':')
+    dyld_library_path += [os.path.join(sys.prefix, 'lib')]
+    os.environ['DYLD_LIBRARY_PATH'] = ':'.join(dyld_library_path)
+
 import discord
 import time
 import datetime
 import re
 import asyncio
-import sys
 import aioschedule as schedule
 import json
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import pickle
-import os.path
+import getpass
+
 
 ################
 
 ####SET THESE VARIABLES FOR YOUR SERVER INSTALLATION
 
-with open('/var/run/secrets/bot_token', 'r') as f:
-    # Discord bot authorization token
-    bot_token = f.read().strip()
+# Discord bot authorization token
+for fn in ('bot_token', '/var/run/secrets/bot_token'):
+    if os.path.exists(fn):
+        with open(fn, 'r') as f:
+            bot_token = f.read().strip()
+        break
+else:
+    raise Exception("couldn't find bot_token")
+
+# google sheet file identifier
+for fn in ('google_sheet_token', '/var/run/secrets/google_sheet_token'):
+    if os.path.exists(fn):
+        with open(fn, 'r') as f:
+            google_sheet_token = f.read().strip()
+        break
+else:
+    raise Exception("couldn't find google_sheet_token")
+
+# google app credentials.json file
+for fn in ('credentials.json', '/var/run/secrets/google_sheet_credentials'):
+    if os.path.exists(fn):
+        json_creds_file = fn
+        break
+else:
+    raise Exception("couldn't find google_sheet_credentials")    
+
+#google app clickthrough authorization
+if os.path.isdir('/var/google_sheet_pickle'):
+    token_path="/var/google_sheet_pickle/pickle"
+else:
+    token_path="pickle"
 
 log_channel_name="log" # Discord channel for error messages
 update_channel_name="update" # Discord channel on which to listen for forced updates
 guild_name="The Eternal Order" # Guild name (Discord server)
-#guild_name="TEO_Bot_Test"
-#msg_channel_name="teo_bot" # Discord channel on which to send announcements
 msg_channel_name="the-eternal-order"
-
-with open('/var/run/secrets/google_sheet_token', 'r') as f:
-    google_sheet_token = f.read().strip()
-
-token_path="/var/google_sheet_pickle/pickle"
-json_creds_file="/var/run/secrets/google_sheet_credentials"
 
 ################
 
@@ -79,23 +119,21 @@ day_names =  [
 
 
 # Global state variables
-google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly']
+google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly',
+               'https://www.googleapis.com/auth/spreadsheets.readonly']
 google_sheet=google_sheet_token
 bot=None  # Discord bot 
 last_mtime=None # Global for google sheet last modified time
 last_update=None # Global for scheduler last update day
 
-if len(sys.argv) >= 2:
-    lfh=open(sys.argv[1], "w")
-else:
-    lfh=sys.stdout
+class FlowEOF(Exception):
+    pass
 
-
-import getpass
-print("running as uid", os.getuid(), "i.e.", getpass.getuser(), file=lfh)
+class FlowNotAllowed(Exception):
+    pass
 
 # Reads a google sheet and sets the scheduler accordingly
-def read_sheet():
+def read_sheet(allow_flow=False):
     global last_mtime
     creds = None
     if os.path.exists(token_path):
@@ -103,14 +141,18 @@ def read_sheet():
             creds = pickle.load(token)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            print("refreshing creds", file=lfh)
+            print("refreshing creds")
             creds.refresh(Request())
         else:
-            print("doing InstalledAppFlow", file=lfh)
-            raise NotImplementedError
+            if not allow_flow:
+                raise FlowNotAllowed("credentials are invalid, restart the bot and go through the OAuth flow again")
+            print("doing OAuth flow")
             flow = InstalledAppFlow.from_client_secrets_file(json_creds_file, google_scopes)
-            creds=flow.run_local_server()
-        sys.stdout.flush()
+            try:
+                creds=flow.run_console()                
+            except EOFError as e:
+                raise FlowEOF("EOFError while doing OAuth flow.  You need to do this part interactively.\n"
+                              "try: docker-compose exec teobot /teo_bot2.py --flow") from e
         with open(token_path, 'wb') as token:
             pickle.dump(creds,token)
     
@@ -120,16 +162,13 @@ def read_sheet():
     mtime = google_drive.files().get(fileId=google_sheet, fields="modifiedTime").execute()['modifiedTime']
     if ((last_mtime is None) or (last_mtime != mtime)):
         last_mtime=mtime
-        print(f'Set new sheet modification time as {mtime}\n', file=lfh)
+        print(f'Set new sheet modification time as {mtime}')
     else:
         return None # Don't need to read the sheet and update the scheduler
-#    print(f'Sheet modficiation time = {mtime}', file=lfh)
     result = google_sheets.spreadsheets().values().get(spreadsheetId=google_sheet,range="A2:C").execute()
     lines = result.get('values', [])
     return lines
-#  for row in values:
- #       print ('%s, %s, %s' % (row[0], row[1], row[2]))
-        
+
 
 
 # Prints message "message" using Bot bot
@@ -138,11 +177,11 @@ async def print_message(message, bot):
     message=re.sub("\{\$TIME\}", now.strftime("%I:%M %p %Z"), message)
     message=re.sub("\{\$DATE\}", now.strftime("%A %B %d, %Y"), message)
     await bot.send(message)
-    print(f"Message : {message}\n", file=lfh)
+    print(f"Message : {message}\n")
     
 
 def print_error(error):
-    print(f"Error : {error}\n", file=lfh)
+    print(f"Error : {error}\n")
 
 
 class ScheduleParseError(Exception):
@@ -165,7 +204,6 @@ def read_schedule():
     #lines.append(["FOOO", "daily", f"{now.hour}:{now.minute+1},{now.hour}:{now.minute+2},{now.hour}:{now.minute+3},{now.hour}:{now.minute+4},{now.hour}:{now.minute+5}"])
 
     for line in lines:
-#        print("In lines loop\n")
         message, days, times = line
         days=re.sub("\s","", days)
         if days.lower() == 'daily':
@@ -183,9 +221,9 @@ def read_schedule():
                 raise ScheduleParseError(f"Eternal Bot Scheduling Error: Hour {time} associated with message {message} is invalid")
 
         for day in days:
-            print(times, file=lfh)
+            print(times)
             for time in times:
-                print(f"Scheduled message {message} for {day} at {time}", file=lfh)
+                print(f"Scheduled message {message} for {day} at {time}")
                 getattr(schedule.every(), day).at(time).do(print_message, message, bot)
                 
         last_update=datetime.datetime.now().strftime("%D")
@@ -196,24 +234,18 @@ async def run_schedule(bot):
     global last_update
     while True:
         await schedule.run_pending()
-#        print(f"Second loop actually ran!!\n", file=lfh)
         now=datetime.datetime.now().strftime('%D')
         if ((last_update is None) or (last_update != now)):
             last_update = now
-            print(f"Updating sheet for day {last_update}\n", file=lfh)
+            print(f"Updating sheet for day {last_update}\n")
             read_schedule()
- #           print(f"larry's dumb print\n", file=lfh)
-#            sys.stdout.write("Clearing schedule...\n")
- #           schedule.clear()
         await asyncio.sleep(1)    
 
 # Discord Bot sublcass
 class Bot:
 
     async def find_guild(self):
-#        print('foo')
         await self.client.wait_until_ready()
- #       print('bar')
         for guild in self.client.guilds:
             if guild.name==guild_name:
                 print("found guild!", guild)
@@ -240,33 +272,44 @@ class Bot:
     async def start(self):
         asyncio.create_task(self.client.start(bot_token))
         self.guild = asyncio.ensure_future(self.find_guild())
-#        self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
- #       self.update_channel = asyncio.ensure_future(self.find_channel(update_channel_name))
+        #self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
+        #self.update_channel = asyncio.ensure_future(self.find_channel(update_channel_name))
         self.msg_channel = asyncio.ensure_future(self.find_channel(msg_channel_name))
 
     def __init__(self):
         self.client = discord.Client()
 
 
-# Async function to run the schedule (required for asyncio to work properly)
-#async def run_schedule():
- #   while True:
-  #      await schedule.run_pending()
-   #     await asyncio.sleep(1)
+def main():
+    print("running as uid", os.getuid(), "i.e.", getpass.getuser())
+    
+    if args.flow:
+        read_sheet(allow_flow=True)
+        sys.exit(0)
 
+    try:
+        read_sheet(allow_flow=True)
+        print("read the sheet :)")
+        sys.stdout.flush()
+    except FlowEOF as e:
+        print()
+        print(e)
+        sys.stdout.flush()
+        while True:
+            time.sleep(2)
+            print('Trying again...')
+            sys.stdout.flush()
+            try:
+                lines = read_sheet()
+            except FlowNotAllowed:
+                pass
+            else:
+                break
 
+    loop = asyncio.get_event_loop()
+    bot = Bot()
+    loop.create_task(bot.start())
+    loop.create_task(run_schedule(bot))
+    loop.run_forever()
 
-loop = asyncio.get_event_loop()
-
-bot = Bot()
-loop.create_task(bot.start())
-
-#read_schedule()
-#loop.create_task(update_scheduler(bot))
-loop.create_task(run_schedule(bot))
-#loop.create_task(larrys_silly_function())
-
-loop.run_forever()
-
-
-
+main()
