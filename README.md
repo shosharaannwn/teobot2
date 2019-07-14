@@ -28,7 +28,7 @@ I don't know where to get this.  Discord or soemthing.
 
 This isn't really a secret token, it's just the google sheet file id.
 
-The sheet for TEO is at [https://docs.google.com/spreadsheets/d/1BLIA28zqbCDtin1VhUIB3hCE9swBugn-_6qcaNBpXfw/edit#gid=0](), so the token is
+The sheet for TEO is at <https://docs.google.com/spreadsheets/d/1BLIA28zqbCDtin1VhUIB3hCE9swBugn-_6qcaNBpXfw/edit#gid=0>, so the token is
 `1BLIA28zqbCDtin1VhUIB3hCE9swBugn-_6qcaNBpXfw`
 
 ### docker
