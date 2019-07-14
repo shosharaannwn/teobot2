@@ -133,7 +133,7 @@ class FlowNotAllowed(Exception):
     pass
 
 # Reads a google sheet and sets the scheduler accordingly
-def read_sheet(allow_flow=False):
+def read_sheet(allow_flow=False, update_mtime=True):
     global last_mtime
     creds = None
     if os.path.exists(token_path):
@@ -160,6 +160,11 @@ def read_sheet(allow_flow=False):
     google_drive = build('drive', 'v3', credentials=creds)
 
     mtime = google_drive.files().get(fileId=google_sheet, fields="modifiedTime").execute()['modifiedTime']
+
+    if not update_mtime:
+        print(f'read the sheet, mtime = {mtime}')
+        return
+
     if ((last_mtime is None) or (last_mtime != mtime)):
         last_mtime=mtime
         print(f'Set new sheet modification time as {mtime}')
@@ -279,28 +284,31 @@ class Bot:
     def __init__(self):
         self.client = discord.Client()
 
+async def flusher():
+    while True:
+        sys.stdout.flush()
+        await asyncio.sleep(1)
 
 def main():
     print("running as uid", os.getuid(), "i.e.", getpass.getuser())
     
     if args.flow:
-        read_sheet(allow_flow=True)
+        read_sheet(allow_flow=True, update_mtime=False)
         sys.exit(0)
 
     try:
-        read_sheet(allow_flow=True)
-        print("read the sheet :)")
+        read_sheet(allow_flow=True, update_mtime=False)
         sys.stdout.flush()
     except FlowEOF as e:
         print()
         print(e)
         sys.stdout.flush()
         while True:
-            time.sleep(2)
+            time.sleep(10)
             print('Trying again...')
             sys.stdout.flush()
             try:
-                lines = read_sheet()
+                read_sheet(update_mtime=False)
             except FlowNotAllowed:
                 pass
             else:
@@ -310,6 +318,7 @@ def main():
     bot = Bot()
     loop.create_task(bot.start())
     loop.create_task(run_schedule(bot))
+    loop.create_task(flusher())
     loop.run_forever()
 
 main()
