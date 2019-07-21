@@ -25,6 +25,7 @@ if sys.platform == 'darwin':
     os.environ['DYLD_LIBRARY_PATH'] = ':'.join(dyld_library_path)
 
 import discord
+import traceback
 import time
 import datetime
 import re
@@ -173,8 +174,8 @@ def normalize_day(day):
     day = day.lower()
     try:
         return day_abbrevs[day]
-    except IndexError:
-        raise ScheduleParseError(f"Eternal Bot Scheduling Error: Day String {day} associated with message {message} is invalid")
+    except KeyError:
+        raise ScheduleParseError(f"Day String invalid")
     
 def read_schedule(bot):
     global last_update
@@ -185,27 +186,41 @@ def read_schedule(bot):
     #now=datetime.datetime.now()
     #lines.append(["FOOO", "daily", f"{now.hour}:{now.minute+1},{now.hour}:{now.minute+2},{now.hour}:{now.minute+3},{now.hour}:{now.minute+4},{now.hour}:{now.minute+5}"])
 
-    for line in lines:
-        message, days, times = line
-        days=re.sub("\s","", days)
-        if days.lower() == 'daily':
-            days = set(day_names)
-        else:
-            days = set(map(normalize_day, days.strip().split(',')))    
-        times=re.sub("\s","",times)
-        if (re.match("hourly", times, re.IGNORECASE)):
-            times = [f'{h}:00' for h in range(24)]
-        else:
-            times = times.split(",")
-        for time in times:
-            if not (re.match("(([0-9]:)|([0-1][0-9]:)|(2[0-3]:))|[0-5][0-9]", time, re.IGNORECASE)):
-                raise ScheduleParseError(f"Eternal Bot Scheduling Error: Hour {time} associated with message {message} is invalid")
-        for day in days:
-            print(times)
+    for i,line in enumerate(lines):
+        try:
+            print(f"Line: {i+2}  {line}")
+            if len(line) < 3:
+                raise ScheduleParseError(f"Row does not have enough columns") 
+            message, days, times = line[:3]
+            days=re.sub("\s","", days)
+            if days.lower() == 'daily':
+                days = set(day_names)
+            else:
+                days = set(map(normalize_day, days.strip().split(',')))    
+            times=re.sub("\s","",times)
+            if (re.match("hourly", times, re.IGNORECASE)):
+                times = [f'{h}:00' for h in range(24)]
+            else:
+                times = times.split(",")
             for time in times:
-                print(f"Scheduled message {message} for {day} at {time}")
-                getattr(schedule.every(), day).at(time).do(print_message, message, bot) 
-        last_update=datetime.datetime.now().strftime("%D")
+                m = re.match(r'(\d+):(\d+)$', time)
+                if not m:
+                    raise ScheduleParseError(f"Time is invalid")
+                hours,minutes = map(int, m.groups())
+                if hours > 23 or minutes > 59:
+                    raise ScheduleParseError(f"Time is invalid")
+                #if not (re.match("(([0-9]:)|([0-1][0-9]:)|(2[0-3]:))|[0-5][0-9]$", time, re.IGNORECASE)):
+                #    raise ScheduleParseError(f"Time is invalid")
+            for day in days:
+                for time in times:
+                    print(f"Scheduled message {message} for {day} at {time}")
+                    getattr(schedule.every(), day).at(time).do(print_message, message, bot)
+            last_update=datetime.datetime.now().strftime("%D")
+        except ScheduleParseError as e:
+            message = f'Eternal Bot Scheduling Error: Row {i+2}: {e.args[0]}'
+            # FIXME send e.message to the log channel
+            print(message)
+         #   traceback.print_exc()
 
 
 # Event loop to listen for manual update request or to check for updates once a day
