@@ -177,7 +177,7 @@ def normalize_day(day):
     except KeyError:
         raise ScheduleParseError(f"Day String invalid")
     
-def read_schedule(bot):
+async def read_schedule(bot):
     global last_update
     lines=read_sheet()
     if lines is None:
@@ -220,6 +220,7 @@ def read_schedule(bot):
             message = f'Eternal Bot Scheduling Error: Row {i+2}: {e.args[0]}'
             # FIXME send e.message to the log channel
             print(message)
+            await bot.send_error(message)
          #   traceback.print_exc()
 
 
@@ -232,7 +233,7 @@ async def run_schedule(bot):
         if ((last_update is None) or (last_update != now)):
             last_update = now
             print(f"Updating sheet for day {last_update}\n")
-            read_schedule(bot)
+            await read_schedule(bot)
         await asyncio.sleep(1)    
 
 # Discord Bot sublcass
@@ -253,6 +254,10 @@ class Bot:
         channel=await self.msg_channel
         await channel.send(message)
 
+    async def send_error(self, error):
+        channel=await self.log_channel
+        await channel.send(error)
+
     async def find_channel(self, name):
         guild = await self.guild
         for channel in guild.channels:
@@ -266,7 +271,7 @@ class Bot:
     async def start(self):
         asyncio.create_task(self.client.start(bot_token))
         self.guild = asyncio.ensure_future(self.find_guild())
-        #self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
+        self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
         #self.update_channel = asyncio.ensure_future(self.find_channel(update_channel_name))
         self.msg_channel = asyncio.ensure_future(self.find_channel(msg_channel_name))
 
