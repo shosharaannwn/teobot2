@@ -49,8 +49,8 @@ google_sheet = config_mod.google_sheet # google sheet file id
 json_creds_file = config_mod.json_creds_file # google app api token
 token_path = config_mod.token_path  # google OAuth user access token 
 
-log_channel_name = config_mod.log_channel_name # Discord channel for error messages
-update_channel_name = config_mod.update_channel_name # Discord channel on which to listen for forced updates
+log_channel_name = getattr(config_mod, 'log_channel_name', None) # Discord channel for error messages
+update_channel_name = getattr(config_mod, 'update_channel_name', None) # Discord channel on which to listen for forced updates
 guild_name = config_mod.guild_name # Guild name (Discord server)
 msg_channel_name = config_mod.msg_channel_name 
 
@@ -102,7 +102,6 @@ google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly',
                'https://www.googleapis.com/auth/spreadsheets.readonly']
 bot=None  # Discord bot 
 last_mtime=None # Global for google sheet last modified time
-last_update=None # Global for scheduler last update day
 
 class FlowEOF(Exception):
     pass
@@ -147,6 +146,7 @@ def read_sheet(allow_flow=False, update_mtime=True):
         last_mtime=mtime
         print(f'Set new sheet modification time as {mtime}')
     else:
+        print(f'Modification time didn not change')
         return None # Don't need to read the sheet and update the scheduler
     result = google_sheets.spreadsheets().values().get(spreadsheetId=google_sheet,range="A2:C").execute()
     lines = result.get('values', [])
@@ -178,9 +178,10 @@ def normalize_day(day):
         raise ScheduleParseError(f"Day String invalid")
     
 async def read_schedule(bot):
-    global last_update
     lines=read_sheet()
+    print(f"In read schedule....")
     if lines is None:
+        print (f"Lines is null")
         return # Nothing to do, no need to update scheduler.
     schedule.clear() # Clear scheduler
     #now=datetime.datetime.now()
@@ -215,7 +216,6 @@ async def read_schedule(bot):
                 for time in times:
                     print(f"Scheduled message {message} for {day} at {time}")
                     getattr(schedule.every(), day).at(time).do(print_message, message, bot)
-            last_update=datetime.datetime.now().strftime("%D")
         except ScheduleParseError as e:
             message = f'Eternal Bot Scheduling Error: Row {i+2}: {e.args[0]}'
             # FIXME send e.message to the log channel
@@ -224,17 +224,6 @@ async def read_schedule(bot):
          #   traceback.print_exc()
 
 
-# Event loop to listen for manual update request or to check for updates once a day
-async def run_schedule(bot):
-    global last_update
-    while True:
-        await schedule.run_pending()
-        now=datetime.datetime.now().strftime('%D')
-        if ((last_update is None) or (last_update != now)):
-            last_update = now
-            print(f"Updating sheet for day {last_update}\n")
-            await read_schedule(bot)
-        await asyncio.sleep(1)    
 
 # Discord Bot sublcass
 class Bot:
@@ -255,6 +244,8 @@ class Bot:
         await channel.send(message)
 
     async def send_error(self, error):
+        if self.log_channel is None:
+            return
         channel=await self.log_channel
         await channel.send(error)
 
@@ -271,12 +262,44 @@ class Bot:
     async def start(self):
         asyncio.create_task(self.client.start(bot_token))
         self.guild = asyncio.ensure_future(self.find_guild())
-        self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
+        if log_channel_name is not None:
+            self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
+        else:
+            self.log_channel=None
         #self.update_channel = asyncio.ensure_future(self.find_channel(update_channel_name))
         self.msg_channel = asyncio.ensure_future(self.find_channel(msg_channel_name))
 
+        @self.client.event
+        async def on_message(message):
+            if self.log_channel is None:
+                return
+            if message.author == self.client.user:
+                return
+            log_channel = await self.log_channel
+            if not (message.channel == log_channel and self.client.user in message.mentions): 
+                return
+            print("got command:", repr(message.content))
+            content = re.sub(r'\<\@\d+\>', '', message.content)
+            if (content.lower().strip()=="update"):
+                print("updating schedule.")
+                self.last_update = datetime.datetime.now()
+                await read_schedule(self)
+
+
+    # Event loop to listen for manual update request or to check for updates once a day
+    async def run_schedule(self):
+        while True:
+            await schedule.run_pending()
+            now=datetime.datetime.now()
+            if ((self.last_update is None) or ((now - self.last_update) > datetime.timedelta(hours=4))):
+                self.last_update = now
+                print(f"Updating sheet at {now}\n")
+                await read_schedule(self)
+            await asyncio.sleep(1)    
+
     def __init__(self):
         self.client = discord.Client()
+        self.last_update = None
 
 async def flusher():
     while True:
@@ -311,7 +334,7 @@ def main():
     loop = asyncio.get_event_loop()
     bot = Bot()
     loop.create_task(bot.start())
-    loop.create_task(run_schedule(bot))
+    loop.create_task(bot.run_schedule())
     loop.create_task(flusher())
     loop.run_forever()
 
