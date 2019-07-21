@@ -7,12 +7,16 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--logfile", "-l")
 parser.add_argument("--flow", action='store_true', help="just do OAuth flow and then exit")
+parser.add_argument("--test", action="store_false", help="Write on test server with test channels")
+parser.add_argument("--config", "-c", required=True)
+
 args = parser.parse_args()
 
 if args.logfile:
     logfile = open(args.logfile, 'a')
     sys.stdout = logfile
     sys.stderr = logfile
+
 
 if sys.platform == 'darwin':
     # this is so ctypes will load the right libcrypto
@@ -32,48 +36,22 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import pickle
 import getpass
+import importlib
 
+config_mod = importlib.import_module(args.config)
 
 ################
 
-####SET THESE VARIABLES FOR YOUR SERVER INSTALLATION
 
-# Discord bot authorization token
-for fn in ('bot_token', '/var/run/secrets/bot_token'):
-    if os.path.exists(fn):
-        with open(fn, 'r') as f:
-            bot_token = f.read().strip()
-        break
-else:
-    raise Exception("couldn't find bot_token")
+bot_token = config_mod.bot_token  # discord bot token
+google_sheet = config_mod.google_sheet # google sheet file id
+json_creds_file = config_mod.json_creds_file # google app api token
+token_path = config_mod.token_path  # google OAuth user access token 
 
-# google sheet file identifier
-for fn in ('google_sheet_token', '/var/run/secrets/google_sheet_token'):
-    if os.path.exists(fn):
-        with open(fn, 'r') as f:
-            google_sheet_token = f.read().strip()
-        break
-else:
-    raise Exception("couldn't find google_sheet_token")
-
-# google app credentials.json file
-for fn in ('credentials.json', '/var/run/secrets/google_sheet_credentials'):
-    if os.path.exists(fn):
-        json_creds_file = fn
-        break
-else:
-    raise Exception("couldn't find google_sheet_credentials")    
-
-#google app clickthrough authorization
-if os.path.isdir('/var/google_sheet_pickle'):
-    token_path="/var/google_sheet_pickle/pickle"
-else:
-    token_path="pickle"
-
-log_channel_name="log" # Discord channel for error messages
-update_channel_name="update" # Discord channel on which to listen for forced updates
-guild_name="The Eternal Order" # Guild name (Discord server)
-msg_channel_name="the-eternal-order"
+log_channel_name = config_mod.log_channel_name # Discord channel for error messages
+update_channel_name = config_mod.update_channel_name # Discord channel on which to listen for forced updates
+guild_name = config_mod.guild_name # Guild name (Discord server)
+msg_channel_name = config_mod.msg_channel_name 
 
 ################
 
@@ -121,7 +99,6 @@ day_names =  [
 # Global state variables
 google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly',
                'https://www.googleapis.com/auth/spreadsheets.readonly']
-google_sheet=google_sheet_token
 bot=None  # Discord bot 
 last_mtime=None # Global for google sheet last modified time
 last_update=None # Global for scheduler last update day
@@ -214,8 +191,7 @@ def read_schedule(bot):
         if days.lower() == 'daily':
             days = set(day_names)
         else:
-            days = set(map(normalize_day, days.strip().split(',')))
-        
+            days = set(map(normalize_day, days.strip().split(',')))    
         times=re.sub("\s","",times)
         if (re.match("hourly", times, re.IGNORECASE)):
             times = [f'{h}:00' for h in range(24)]
@@ -224,13 +200,11 @@ def read_schedule(bot):
         for time in times:
             if not (re.match("(([0-9]:)|([0-1][0-9]:)|(2[0-3]:))|[0-5][0-9]", time, re.IGNORECASE)):
                 raise ScheduleParseError(f"Eternal Bot Scheduling Error: Hour {time} associated with message {message} is invalid")
-
         for day in days:
             print(times)
             for time in times:
                 print(f"Scheduled message {message} for {day} at {time}")
-                getattr(schedule.every(), day).at(time).do(print_message, message, bot)
-                
+                getattr(schedule.every(), day).at(time).do(print_message, message, bot) 
         last_update=datetime.datetime.now().strftime("%D")
 
 
