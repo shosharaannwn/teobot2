@@ -18,12 +18,6 @@ if args.logfile:
     sys.stderr = logfile
 
 
-if sys.platform == 'darwin':
-    # this is so ctypes will load the right libcrypto
-    dyld_library_path = os.environ.get('DYLD_LIBRARY_PATH', '').split(':')
-    dyld_library_path += [os.path.join(sys.prefix, 'lib')]
-    os.environ['DYLD_LIBRARY_PATH'] = ':'.join(dyld_library_path)
-
 import discord
 import traceback
 import time
@@ -39,7 +33,7 @@ import pickle
 import getpass
 import importlib
 
-config_mod = importlib.import_module(args.config)
+config_mod = importlib.import_module(re.sub(r'.py$', '', args.config))
 
 ################
 
@@ -50,7 +44,6 @@ json_creds_file = config_mod.json_creds_file # google app api token
 token_path = config_mod.token_path  # google OAuth user access token 
 
 log_channel_name = getattr(config_mod, 'log_channel_name', None) # Discord channel for error messages
-update_channel_name = getattr(config_mod, 'update_channel_name', None) # Discord channel on which to listen for forced updates
 guild_name = config_mod.guild_name # Guild name (Discord server)
 msg_channel_name = config_mod.msg_channel_name 
 
@@ -177,56 +170,51 @@ def normalize_day(day):
     except KeyError:
         raise ScheduleParseError(f"Day String invalid")
     
-async def read_schedule(bot):
-    lines=read_sheet()
-    print(f"In read schedule....")
-    if lines is None:
-        print (f"Lines is null")
-        return # Nothing to do, no need to update scheduler.
-    schedule.clear() # Clear scheduler
-    #now=datetime.datetime.now()
-    #lines.append(["FOOO", "daily", f"{now.hour}:{now.minute+1},{now.hour}:{now.minute+2},{now.hour}:{now.minute+3},{now.hour}:{now.minute+4},{now.hour}:{now.minute+5}"])
 
-    for i,line in enumerate(lines):
-        try:
-            print(f"Line: {i+2}  {line}")
-            if len(line) < 3:
-                raise ScheduleParseError(f"Row does not have enough columns") 
-            message, days, times = line[:3]
-            days=re.sub("\s","", days)
-            if days.lower() == 'daily':
-                days = set(day_names)
-            else:
-                days = set(map(normalize_day, days.strip().split(',')))    
-            times=re.sub("\s","",times)
-            if (re.match("hourly", times, re.IGNORECASE)):
-                times = [f'{h}:00' for h in range(24)]
-            else:
-                times = times.split(",")
-            for time in times:
-                m = re.match(r'(\d+):(\d+)$', time)
-                if not m:
-                    raise ScheduleParseError(f"Time is invalid")
-                hours,minutes = map(int, m.groups())
-                if hours > 23 or minutes > 59:
-                    raise ScheduleParseError(f"Time is invalid")
-                #if not (re.match("(([0-9]:)|([0-1][0-9]:)|(2[0-3]:))|[0-5][0-9]$", time, re.IGNORECASE)):
-                #    raise ScheduleParseError(f"Time is invalid")
-            for day in days:
-                for time in times:
-                    print(f"Scheduled message {message} for {day} at {time}")
-                    getattr(schedule.every(), day).at(time).do(print_message, message, bot)
-        except ScheduleParseError as e:
-            message = f'Eternal Bot Scheduling Error: Row {i+2}: {e.args[0]}'
-            # FIXME send e.message to the log channel
-            print(message)
-            await bot.send_error(message)
-         #   traceback.print_exc()
-
-
-
-# Discord Bot sublcass
+# Discord Bot cass
 class Bot:
+
+    async def read_schedule(self):
+        lines=read_sheet()
+        print(f"In read schedule....")
+        if lines is None:
+            print (f"Lines is null")
+            return # Nothing to do, no need to update scheduler.
+        schedule.clear() # Clear scheduler
+
+        for i,line in enumerate(lines):
+            try:
+                print(f"Line: {i+2}  {line}")
+                if len(line) < 3:
+                    raise ScheduleParseError(f"Row does not have enough columns")
+                message, days, times = line[:3]
+                days=re.sub("\s","", days)
+                if days.lower() == 'daily':
+                    days = set(day_names)
+                else:
+                    days = set(map(normalize_day, days.strip().split(',')))
+                times=re.sub("\s","",times)
+                if (re.match("hourly", times, re.IGNORECASE)):
+                    times = [f'{h}:00' for h in range(24)]
+                else:
+                    times = times.split(",")
+                for time in times:
+                    m = re.match(r'(\d+):(\d+)$', time)
+                    if not m:
+                        raise ScheduleParseError(f"Time is invalid")
+                    hours,minutes = map(int, m.groups())
+                    if hours > 23 or minutes > 59:
+                        raise ScheduleParseError(f"Time is invalid")
+                for day in days:
+                    for time in times:
+                        print(f"Scheduled message {message} for {day} at {time}")
+                        getattr(schedule.every(), day).at(time).do(print_message, message, self)
+            except ScheduleParseError as e:
+                message = f'Eternal Bot Scheduling Error: Row {i+2}: {e.args[0]}'
+                #traceback.print_exc()
+                print(message)
+                await self.send_error(message)
+
 
     async def find_guild(self):
         await self.client.wait_until_ready()
@@ -260,13 +248,12 @@ class Bot:
             return None
 
     async def start(self):
-        asyncio.create_task(self.client.start(bot_token))
+
         self.guild = asyncio.ensure_future(self.find_guild())
         if log_channel_name is not None:
             self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
         else:
             self.log_channel=None
-        #self.update_channel = asyncio.ensure_future(self.find_channel(update_channel_name))
         self.msg_channel = asyncio.ensure_future(self.find_channel(msg_channel_name))
 
         @self.client.event
@@ -283,7 +270,9 @@ class Bot:
             if (content.lower().strip()=="update"):
                 print("updating schedule.")
                 self.last_update = datetime.datetime.now()
-                await read_schedule(self)
+                await self.read_schedule()
+
+        await self.client.start(bot_token)
 
 
     # Event loop to listen for manual update request or to check for updates once a day
@@ -294,7 +283,7 @@ class Bot:
             if ((self.last_update is None) or ((now - self.last_update) > datetime.timedelta(hours=4))):
                 self.last_update = now
                 print(f"Updating sheet at {now}\n")
-                await read_schedule(self)
+                await self.read_schedule()
             await asyncio.sleep(1)    
 
     def __init__(self):
@@ -333,9 +322,14 @@ def main():
 
     loop = asyncio.get_event_loop()
     bot = Bot()
-    loop.create_task(bot.start())
-    loop.create_task(bot.run_schedule())
-    loop.create_task(flusher())
-    loop.run_forever()
+
+    run_tasks = asyncio.gather(
+        loop.create_task(bot.start()),
+        loop.create_task(flusher()),
+        loop.create_task(bot.run_schedule()))
+    loop.run_until_complete(run_tasks)
+    run_tasks.result()
+    raise Exception("infinite loop returned??")
+
 
 main()
