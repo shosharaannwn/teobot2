@@ -1,8 +1,29 @@
 #!/usr/bin/python3
 
+import sys
+sys.path = ['/Users/lawrence_danna/src/python3/Python-dev/Lib'] + sys.path
+
+
 import os
 import sys
 import argparse
+import traceback
+import time
+import datetime
+import re
+import asyncio
+import json
+import pickle
+import getpass
+import importlib
+
+import discord
+from googleapiclient.discovery import build
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+import aioschedule as schedule
+
+################
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--logfile", "-l")
@@ -16,27 +37,9 @@ if args.logfile:
     logfile = open(args.logfile, 'a')
     sys.stdout = logfile
     sys.stderr = logfile
-
-
-import discord
-import traceback
-import time
-import datetime
-import re
-import asyncio
-import aioschedule as schedule
-import json
-from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-import pickle
-import getpass
-import importlib
+    sys.stdin  = open(os.devnull, 'r')
 
 config_mod = importlib.import_module(re.sub(r'.py$', '', args.config))
-
-################
-
 
 bot_token = config_mod.bot_token  # discord bot token
 google_sheet = config_mod.google_sheet # google sheet file id
@@ -93,7 +96,6 @@ day_names =  [
 # Global state variables
 google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly',
                'https://www.googleapis.com/auth/spreadsheets.readonly']
-bot=None  # Discord bot 
 last_mtime=None # Global for google sheet last modified time
 
 class FlowEOF(Exception):
@@ -103,7 +105,9 @@ class FlowNotAllowed(Exception):
     pass
 
 # Reads a google sheet and sets the scheduler accordingly
-def read_sheet(allow_flow=False, update_mtime=True):
+def read_sheet(allow_flow=False, use_mtime=True, update_mtime=None):
+    if update_mtime is None:
+        update_mtime = use_mtime
     global last_mtime
     creds = None
     if os.path.exists(token_path):
@@ -130,17 +134,17 @@ def read_sheet(allow_flow=False, update_mtime=True):
     google_drive = build('drive', 'v3', credentials=creds)
 
     mtime = google_drive.files().get(fileId=google_sheet, fields="modifiedTime").execute()['modifiedTime']
+    print(f'Read the sheet, mtime = {mtime}')
 
-    if not update_mtime:
-        print(f'read the sheet, mtime = {mtime}')
-        return
+    if use_mtime:
+        if last_mtime == mtime:
+            print(f'Modification time did not change')
+            return None # Don't need to read the sheet and update the scheduler
 
-    if ((last_mtime is None) or (last_mtime != mtime)):
+    if update_mtime:
         last_mtime=mtime
         print(f'Set new sheet modification time as {mtime}')
-    else:
-        print(f'Modification time didn not change')
-        return None # Don't need to read the sheet and update the scheduler
+
     result = google_sheets.spreadsheets().values().get(spreadsheetId=google_sheet,range="A2:C").execute()
     lines = result.get('values', [])
     return lines
@@ -174,11 +178,14 @@ def normalize_day(day):
 # Discord Bot cass
 class Bot:
 
-    async def read_schedule(self):
-        lines=read_sheet()
-        print(f"In read schedule....")
+    async def read_schedule(self, user_initiated=False):
+        if user_initiated:
+            lines = read_sheet(use_mtime=False, update_mtime=True)
+        else:
+            lines = read_sheet()
         if lines is None:
-            print (f"Lines is null")
+            if user_initiated:
+                await self.send_log("Google sheet is unchanged")
             return # Nothing to do, no need to update scheduler.
         schedule.clear() # Clear scheduler
 
@@ -213,8 +220,9 @@ class Bot:
                 message = f'Eternal Bot Scheduling Error: Row {i+2}: {e.args[0]}'
                 #traceback.print_exc()
                 print(message)
-                await self.send_error(message)
+                await self.send_log(message)
 
+        await self.send_log("Schedule updated.")
 
     async def find_guild(self):
         await self.client.wait_until_ready()
@@ -231,7 +239,7 @@ class Bot:
         channel=await self.msg_channel
         await channel.send(message)
 
-    async def send_error(self, error):
+    async def send_log(self, error):
         if self.log_channel is None:
             return
         channel=await self.log_channel
@@ -270,12 +278,19 @@ class Bot:
             if (content.lower().strip()=="update"):
                 print("updating schedule.")
                 self.last_update = datetime.datetime.now()
-                await self.read_schedule()
+                await self.read_schedule(user_initiated=True)
+            elif 'help' in content.lower() or '?' in content:
+                await self.send_log(f"I'm {self.client.user.name}!  I read messages from a google sheet and announce them at the scheduled times.\n" +
+                                    f'Say "@{self.client.user.name} help" to see this message\n' +
+                                    f"Google sheet is at https://docs.google.com/spreadsheets/d/{google_sheet}\n" +
+                                    f'Say "@{self.client.user.name} update" and I will read it again\n')
+            else:
+                await self.send_log(f"Sorry, I don't understand that.  Say \"@{self.client.user.name} help\" for instructions.")
+
 
         await self.client.start(bot_token)
 
-
-    # Event loop to listen for manual update request or to check for updates once a day
+    # check for updates every four hours
     async def run_schedule(self):
         while True:
             await schedule.run_pending()
@@ -299,11 +314,11 @@ def main():
     print("running as uid", os.getuid(), "i.e.", getpass.getuser())
     
     if args.flow:
-        read_sheet(allow_flow=True, update_mtime=False)
+        read_sheet(allow_flow=True, use_mtime=False)
         sys.exit(0)
 
     try:
-        read_sheet(allow_flow=True, update_mtime=False)
+        read_sheet(allow_flow=True, use_mtime=False)
         sys.stdout.flush()
     except FlowEOF as e:
         print()
@@ -314,7 +329,7 @@ def main():
             print('Trying again...')
             sys.stdout.flush()
             try:
-                read_sheet(update_mtime=False)
+                read_sheet(use_mtime=False)
             except FlowNotAllowed:
                 pass
             else:
