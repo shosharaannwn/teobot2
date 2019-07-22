@@ -279,6 +279,20 @@ class Bot:
                 print("updating schedule.")
                 self.last_update = datetime.datetime.now()
                 await self.read_schedule(user_initiated=True)
+            if (content.lower().strip()=="dance"):
+                dance = ["We can dance if we want to",
+                         "We can leave your friends behind",
+                         "Cause your friends don't dance and if they don't dance",
+                         "Well they're are no friends of mine",
+                         "I say, we can go where we want to...",
+                         "to a place where they will never find",
+                         "And we can act like we come from out of this world",
+                         "Leave the real one far behind,",
+                         "And we can dance"]
+                for lyric in dance:
+                    await self.send_log("🎶" + lyric + "🎶")
+                    await asyncio.sleep(1)
+
             elif 'help' in content.lower() or '?' in content:
                 await self.send_log(f"I'm {self.client.user.name}!  I read messages from a google sheet and announce them at the scheduled times.\n" +
                                     f'Say "<@{self.client.user.id}> help" to see this message\n' +
