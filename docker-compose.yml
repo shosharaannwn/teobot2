@@ -6,7 +6,6 @@ services:
     user: teobot
     secrets:
       - bot_token
-      - google_sheet_token
       - google_sheet_credentials
     volumes:
       - google_sheet_pickle:/var/google_sheet_pickle
@@ -15,7 +14,5 @@ volumes:
 secrets:
   bot_token:
     file: ./bot_token
-  google_sheet_token:
-    file: ./google_sheet_token
   google_sheet_credentials:
     file: ./credentials.json

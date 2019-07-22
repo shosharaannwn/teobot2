@@ -109,6 +109,11 @@ def read_sheet(allow_flow=False, use_mtime=True, update_mtime=None):
     if os.path.exists(token_path):
         with open(token_path, 'rb') as token:
             creds = pickle.load(token)
+        if not os.access(token_path, os.W_OK):
+            raise Exception(f"I don't have access to write file {token_path}")
+    else:
+        if not os.access(os.path.dirname(token_path), os.W_OK):
+            raise Exception(f"I don't have access to create file at {token_path}")
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             print("refreshing creds")
@@ -122,7 +127,7 @@ def read_sheet(allow_flow=False, use_mtime=True, update_mtime=None):
                 creds=flow.run_console()                
             except EOFError as e:
                 raise FlowEOF("EOFError while doing OAuth flow.  You need to do this part interactively.\n"
-                              "try: docker-compose exec teobot /teo_bot2.py --flow") from e
+                              f"try: docker-compose exec teobot /teo_bot2.py --config {args.config} --flow") from e
         with open(token_path, 'wb') as token:
             pickle.dump(creds,token)
     
@@ -147,18 +152,7 @@ def read_sheet(allow_flow=False, use_mtime=True, update_mtime=None):
 
 
 
-# Prints message "message" using Bot bot
-async def print_message(message, bot):
-    now=datetime.datetime.now()
-    message=re.sub("\{\$TIME\}", now.strftime("%I:%M %p %Z"), message)
-    message=re.sub("\{\$DATE\}", now.strftime("%A %B %d, %Y"), message)
-    await bot.send(message)
-    print(f"Message : {message}\n")
     
-
-def print_error(error):
-    print(f"Error : {error}\n")
-
 
 class ScheduleParseError(Exception):
     pass
@@ -211,7 +205,7 @@ class Bot:
                 for day in days:
                     for time in times:
                         print(f"Scheduled message {message} for {day} at {time}")
-                        getattr(schedule.every(), day).at(time).do(print_message, message, self)
+                        getattr(schedule.every(), day).at(time).do(self.print_message, message)
             except ScheduleParseError as e:
                 message = f'Eternal Bot Scheduling Error: Row {i+2}: {e.args[0]}'
                 #traceback.print_exc()
@@ -231,15 +225,24 @@ class Bot:
             sys.exit(1)
 
     async def send(self, message):
-        sys.stdout.write("In bot send for Message :"+message+"\n")
+        print ("Sending Message:", message)
         channel=await self.msg_channel
         await channel.send(message)
 
-    async def send_log(self, error):
+    async def send_log(self, message):
+        print ("Sending Log Message:", message)
         if self.log_channel is None:
             return
         channel=await self.log_channel
-        await channel.send(error)
+        await channel.send(message)
+
+    # Prints message "message" using Bot bot
+    async def print_message(self, message):
+        now=datetime.datetime.now()
+        message=re.sub("\{\$TIME\}", now.strftime("%I:%M %p %Z"), message)
+        message=re.sub("\{\$DATE\}", now.strftime("%A %B %d, %Y"), message)
+        await self.send(message)
+
 
     async def find_channel(self, name):
         guild = await self.guild
@@ -271,11 +274,13 @@ class Bot:
                 return
             print("got command:", repr(message.content))
             content = re.sub(r'\<\@\d+\>', '', message.content)
-            if (content.lower().strip()=="update"):
+
+            if content.lower().strip()=="update":
                 print("updating schedule.")
                 self.last_update = datetime.datetime.now()
                 await self.read_schedule(user_initiated=True)
-            if (content.lower().strip()=="dance"):
+
+            elif content.lower().strip()=="dance":
                 dance = ["We can dance if we want to",
                          "We can leave your friends behind",
                          "Cause your friends don't dance and if they don't dance",
@@ -287,12 +292,25 @@ class Bot:
                          "And we can dance"]
                 for lyric in dance:
                     await self.send_log("🎶" + lyric + "🎶")
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(2)
+
+            elif content.lower().strip()=="sheet":
+
+                await self.send_log(f"https://docs.google.com/spreadsheets/d/{google_sheet}")
+
+            elif content.lower().strip()=="status":
+
+                jobs = iter(sorted(schedule.default_scheduler.jobs, key=lambda job: job.next_run))
+                next_job = next(jobs, None)
+                await self.send_log(f"Next announcement is at {next_job.next_run}\n" +
+                                    f"Text is: {next_job.job_func.args[0]}")
+
 
             elif 'help' in content.lower() or '?' in content:
                 await self.send_log(f"I'm {self.client.user.name}!  I read messages from a google sheet and announce them at the scheduled times.\n" +
                                     f'Say "<@{self.client.user.id}> help" to see this message\n' +
-                                    f"Google sheet is at https://docs.google.com/spreadsheets/d/{google_sheet}\n" +
+                                    f'Say "<@{self.client.user.id}> status" to see current bot status\n' +
+                                    f'Say "<@{self.client.user.id}> sheet" to get a link to the google sheet\n' +
                                     f'Say "<@{self.client.user.id}> update" and I will read it again\n')
             else:
                 await self.send_log(f"Sorry, I don't understand that.  Say \"<@{self.client.user.id}> help\" for instructions.")
@@ -305,7 +323,7 @@ class Bot:
         while True:
             await schedule.run_pending()
             now=datetime.datetime.now()
-            if ((self.last_update is None) or ((now - self.last_update) > datetime.timedelta(hours=4))):
+            if ((self.last_update is None) or ((now - self.last_update) > datetime.timedelta(hours=1))):
                 self.last_update = now
                 print(f"Updating sheet at {now}\n")
                 await self.read_schedule()

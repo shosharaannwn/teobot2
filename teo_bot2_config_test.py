@@ -1,8 +1,7 @@
 import os
+
 #google sheet file identifier
-
 google_sheet="1DhBuh1NyOXb2T_eBNbV4QsE0vazk1JsWmnECvUSSF_E"
-
 
 # Discord bot authorization token
 for fn in ('bot_token', '/var/run/secrets/bot_token'):
@@ -13,7 +12,6 @@ for fn in ('bot_token', '/var/run/secrets/bot_token'):
 else:
     raise Exception("couldn't find bot_token")
 
-
 # google app credentials.json file
 for fn in ('credentials.json', '/var/run/secrets/google_sheet_credentials'):
     if os.path.exists(fn):
@@ -22,11 +20,11 @@ for fn in ('credentials.json', '/var/run/secrets/google_sheet_credentials'):
 else:
     raise Exception("couldn't find google_sheet_credentials")    
 
-#google app clickthrough authorization
-#if os.path.isdir('/var/google_sheet_pickle'):
- #   token_path="/var/google_sheet_pickle/pickle"
-#else:
-token_path="pickle"
+# google OAuth user login file
+if os.path.exists("/var/google_sheet_pickle/"):
+    token_path = "/var/google_sheet_pickle/pickle"
+else:
+    token_path="pickle"
 
 log_channel_name="log" # Discord channel for error messages
 update_channel_name="update" # Discord channel on which to listen for forced updates
