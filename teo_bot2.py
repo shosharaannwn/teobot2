@@ -1,9 +1,5 @@
 #!/usr/bin/python3
 
-import sys
-sys.path = ['/Users/lawrence_danna/src/python3/Python-dev/Lib'] + sys.path
-
-
 import os
 import sys
 import argparse
