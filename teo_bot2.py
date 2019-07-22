@@ -281,11 +281,11 @@ class Bot:
                 await self.read_schedule(user_initiated=True)
             elif 'help' in content.lower() or '?' in content:
                 await self.send_log(f"I'm {self.client.user.name}!  I read messages from a google sheet and announce them at the scheduled times.\n" +
-                                    f'Say "@{self.client.user.name} help" to see this message\n' +
+                                    f'Say "<@{self.client.user.id}> help" to see this message\n' +
                                     f"Google sheet is at https://docs.google.com/spreadsheets/d/{google_sheet}\n" +
-                                    f'Say "@{self.client.user.name} update" and I will read it again\n')
+                                    f'Say "<@{self.client.user.id}> update" and I will read it again\n')
             else:
-                await self.send_log(f"Sorry, I don't understand that.  Say \"@{self.client.user.name} help\" for instructions.")
+                await self.send_log(f"Sorry, I don't understand that.  Say \"<@{self.client.user.id}> help\" for instructions.")
 
 
         await self.client.start(bot_token)
