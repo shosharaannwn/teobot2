@@ -27,6 +27,5 @@ else:
     token_path="pickle"
 
 log_channel_name="log" # Discord channel for error messages
-update_channel_name="update" # Discord channel on which to listen for forced updates
 guild_name="TEO_Bot_Test" # Guild name (Discord server)
 msg_channel_name="teo_bot"

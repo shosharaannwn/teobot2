@@ -24,6 +24,5 @@ else:
 token_path="/var/google_sheet_pickle/pickle"
 
 log_channel_name="log" # Discord channel for error messages
-update_channel_name="update" # Discord channel on which to listen for forced updates
 guild_name="The Eternal Order" # Guild name (Discord server)
 msg_channel_name="the-eternal-order"
