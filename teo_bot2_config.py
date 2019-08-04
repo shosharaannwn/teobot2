@@ -23,6 +23,10 @@ else:
 #google app clickthrough authorization
 token_path="/var/google_sheet_pickle/pickle"
 
-log_channel_name="log" # Discord channel for error messages
-guild_name="The Eternal Order" # Guild name (Discord server)
+# Discord channel and guild for error messages
+log_channel_guild_name = "TEO_Bot_Test" 
+log_channel_name="prod_admin" 
+
+# Discord channel and guild for announcements
+guild_name="The Eternal Order" 
 msg_channel_name="the-eternal-order"

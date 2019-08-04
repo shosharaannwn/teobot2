@@ -42,7 +42,9 @@ google_sheet = config_mod.google_sheet # google sheet file id
 json_creds_file = config_mod.json_creds_file # google app api token
 token_path = config_mod.token_path  # google OAuth user access token 
 
+log_channel_guild_name = getattr(config_mod, 'log_channel_guild_name', None)
 log_channel_name = getattr(config_mod, 'log_channel_name', None) # Discord channel for error messages
+
 guild_name = config_mod.guild_name # Guild name (Discord server)
 msg_channel_name = config_mod.msg_channel_name 
 
@@ -112,7 +114,10 @@ def read_sheet(allow_flow=False, use_mtime=True, update_mtime=None):
         if not os.access(token_path, os.W_OK):
             raise Exception(f"I don't have access to write file {token_path}")
     else:
-        if not os.access(os.path.dirname(token_path), os.W_OK):
+        dirname = os.path.dirname(token_path)
+        if dirname == '':
+            dirname = '.'
+        if not os.access(dirname, os.W_OK):
             raise Exception(f"I don't have access to create file at {token_path}")
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -214,14 +219,14 @@ class Bot:
 
         await self.send_log("Schedule updated.")
 
-    async def find_guild(self):
+    async def find_guild(self, name):
         await self.client.wait_until_ready()
         for guild in self.client.guilds:
-            if guild.name==guild_name:
+            if guild.name==name:
                 print("found guild!", guild)
                 return guild
         else:
-            sys.stdout.write("Invalid guild name "+guild_name+"\n")
+            sys.stdout.write("Invalid guild name "+name+"\n")
             sys.exit(1)
 
     async def send(self, message):
@@ -244,8 +249,8 @@ class Bot:
         await self.send(message)
 
 
-    async def find_channel(self, name):
-        guild = await self.guild
+    async def find_channel(self, guild_future, name):
+        guild = await guild_future
         for channel in guild.channels:
             if channel.name == name:
                 print("found channel!", name, channel)
@@ -256,12 +261,17 @@ class Bot:
 
     async def start(self):
 
-        self.guild = asyncio.ensure_future(self.find_guild())
+        self.guild = asyncio.ensure_future(self.find_guild(guild_name))
+        self.msg_channel = asyncio.ensure_future(self.find_channel(self.guild, msg_channel_name))
+        
         if log_channel_name is not None:
-            self.log_channel = asyncio.ensure_future(self.find_channel(log_channel_name))
+            if log_channel_guild_name is None:
+                self.log_guild = self.guild
+            else:
+                self.log_guild = asyncio.ensure_future(self.find_guild(log_channel_guild_name))
+            self.log_channel = asyncio.ensure_future(self.find_channel(self.log_guild, log_channel_name))
         else:
             self.log_channel=None
-        self.msg_channel = asyncio.ensure_future(self.find_channel(msg_channel_name))
 
         @self.client.event
         async def on_message(message):
