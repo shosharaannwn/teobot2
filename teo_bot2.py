@@ -78,6 +78,7 @@ day_abbrevs = {
     'fri' : 'friday',
     'sat' : 'saturday',
     'sun' : 'sunday',
+    'skip' : 'skip',
 }
 
 day_names =  [
@@ -191,6 +192,8 @@ class Bot:
                     raise ScheduleParseError(f"Row does not have enough columns")
                 message, days, times = line[:3]
                 days=re.sub("\s","", days)
+                if days.lower() == 'skip':
+                    continue;
                 if days.lower() == 'daily':
                     days = set(day_names)
                 else:
@@ -349,7 +352,7 @@ async def flusher():
         await asyncio.sleep(1)
 
 def main():
-    print("running as uid", os.getuid(), "i.e.", getpass.getuser())
+    #print("running as uid", os.getuid(), "i.e.", getpass.getuser())
     
     if args.flow:
         read_sheet(allow_flow=True, use_mtime=False)
