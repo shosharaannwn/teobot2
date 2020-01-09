@@ -51,6 +51,7 @@ token_path = config_mod.token_path  # google OAuth user access token
 log_channel_guild_name = getattr(config_mod, 'log_channel_guild_name', None)
 log_channel_name = getattr(config_mod, 'log_channel_name', None) # Discord channel for error messages
 help_channel_name = getattr(config_mod, 'help_channel_name', None)
+help_channel_guild_name = getattr(config_mod, 'help_channel_guild_name', None)
 
 guild_name = config_mod.guild_name # Guild name (Discord server)
 msg_channel_name = config_mod.msg_channel_name 
@@ -98,6 +99,11 @@ day_names =  [
     'sunday',
 ]
 
+time_names = [
+        'current time',
+        'time'
+]
+
 
 # Global state variables
 google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly',
@@ -114,10 +120,11 @@ class FlowNotAllowed(Exception):
 
 class SheetReader:
 
-    def __init__ (self, sheet, range):
+    def __init__ (self, sheet, range, multiple_sheets):
         self.sheet=sheet
         self.range=range
         self.last_mtime=None
+        self.multiple_sheets=multiple_sheets
     
     # Reads a google sheet and sets the scheduler accordingly
     def read_sheet(self, allow_flow=False, use_mtime=True, update_mtime=None):
@@ -157,22 +164,30 @@ class SheetReader:
 
         mtime = google_drive.files().get(fileId=self.sheet, fields="modifiedTime").execute()['modifiedTime']
         print(f'Read the sheet, mtime = {mtime}')
-
+        lines = []
         if use_mtime:
             if self.last_mtime == mtime:
                 print(f'Modification time did not change')
                 return None # Don't need to read the sheet and update the scheduler
-
         if update_mtime:
             self.last_mtime=mtime
             print(f'Set new sheet modification time as {mtime}')
-
-        result = google_sheets.spreadsheets().values().get(spreadsheetId=self.sheet,range=self.range).execute()
-        lines = result.get('values', [])
+        if self.multiple_sheets:
+            sheet_data=google_sheets.spreadsheets().get(spreadsheetId=self.sheet).execute()
+            for sheet in sheet_data['sheets']:
+                title=sheet['properties']['title']
+               # json.dump(sheet,sys.stdout,indent=True)
+               # print() 
+                result = google_sheets.spreadsheets().values().get(spreadsheetId=self.sheet,range=f"'{title}'!{self.range}").execute()
+         #       result = sheet.values().get(range=self.range).execute()
+                lines+=result.get('values', [])
+        else:        
+            result = google_sheets.spreadsheets().values().get(spreadsheetId=self.sheet,range=self.range).execute()
+            lines = result.get('values', [])
         return lines
 
-faq_reader=SheetReader(faq_sheet, "A2:G")
-announcement_reader=SheetReader(google_sheet, "A2:C")
+faq_reader=SheetReader(faq_sheet, "A2:G", True)
+announcement_reader=SheetReader(google_sheet, "A2:C", False)
 
 class ScheduleParseError(Exception):
     pass
@@ -189,7 +204,8 @@ def normalize_day(day):
 class Bot:
 
     async def read_faq(self, user_initiated=False):
-        table=defaultdict(list)
+        table=defaultdict(list) # topic -> [help message]
+        main_topics_table=defaultdict(set) # main topic -> [list of sub topics]
         if user_initiated:
             lines = faq_reader.read_sheet(use_mtime=False, update_mtime=True)
         else:
@@ -197,12 +213,12 @@ class Bot:
         if lines is None:
             if user_initiated:
                 await self.send_log("FAQ sheet is unchanged")
-            return # Nothing to do, no need to update scheduler.
+            return # Nothing to do, no need to update faq.
         for i,line in enumerate(lines):
             if len(line) < 7:
                 continue # This is expected in the sheet. Incorrectly formatted lines are simply ignored.
             topic_str=line[faq_topic].strip()
-            topics=re.split(r",|;", line[faq_topic])
+            topics=re.split(":", line[faq_topic])
             if len(topics) < 1:
                 continue # Skipping blank lines
             text=""
@@ -210,11 +226,20 @@ class Bot:
                 text=f"**[Repupblic]** {line[faq_rep]} \n**[Imperial]** {line[faq_imp]}"
             else:
                 text=line[faq_rep]
-            for t in topics:
-                print(f"Adding text {text} to topic {t}")
-                table[t.strip().lower()].append(text)
+            main_t=topics[0].strip().lower()        
+            if len(topics) == 1:
+                table[main_t].append(text)
+                print(f"Adding text {text} to main topic {main_t}")
+                main_topics_table[main_t]
+            else:
+                sub_t=topics[1].strip().lower()
+                print(f"Adding text {text} to topic {sub_t}")
+                table[sub_t].append(text)
+                main_topics_table[main_t].add(sub_t)
+                print(f"Adding subtopic {sub_t} to topic {main_t}")
+                
         self.faq_table=table
-        
+        self.faq_main_topics_table=main_topics_table
                     
     async def read_schedule(self, user_initiated=False):
         if user_initiated:
@@ -317,7 +342,13 @@ class Bot:
         self.msg_channel = asyncio.ensure_future(self.find_channel(self.guild, msg_channel_name))
         
         if help_channel_name is not None:
-            self.help_channel = asyncio.ensure_future(self.find_channel(self.guild, help_channel_name))
+            if help_channel_guild_name is None:
+                self.help_guild = self.guild
+            else:
+                self.help_guild = asyncio.ensure_future(self.find_guild(help_channel_guild_name))
+            self.help_channel = asyncio.ensure_future(self.find_channel(self.help_guild, help_channel_name))
+        else:
+            self.help_channel=None
         
         if log_channel_name is not None:
             if log_channel_guild_name is None:
@@ -327,6 +358,7 @@ class Bot:
             self.log_channel = asyncio.ensure_future(self.find_channel(self.log_guild, log_channel_name))
         else:
             self.log_channel=None
+
 
         @self.client.event
         async def on_message(message):
@@ -339,29 +371,45 @@ class Bot:
             if (message.channel == help_channel and self.client.user in message.mentions):
                 print(f"got a message! {message.content}")
                 try:
-                    content = re.sub(r'\<\@\d+\>', '', message.content)
+                    content = re.sub(r'\<\@\!\d+\>', '', message.content)
                     content = content.strip()
                     content = content.lower()
-                    print(f"what the fuck {content}")
-                    if content in self.faq_table:
+                    print(f"wtf {content}")
+                    if content == "time":
+                        now=datetime.datetime.now()
+                        await self.send_faq("The current time (Pacific Time USA (PT)) is: "+ now.strftime("%A %B %d, %Y") + " " + now.strftime("%I:%M %p %Z")+"\n")
+                    elif content in self.faq_table:
                         print (f"message is a valid topic!")
                         start=0
-                        for message in self.faq_table[content]:
+                        for msg in self.faq_table[content]:
                             if start != 0:
                                 await self.send_faq("-----------------------------------\n")
                             start=start+1
-                            await self.send_faq(f"{message}\n")
+                            await self.send_faq(f"{msg}\n")
+                        if content in self.faq_main_topics_table:
+                            topics=", ".join(self.faq_main_topics_table[content])
+                            msg=f"-----------------------------\n--------------------------\nThe following sub-topics are available relating to **{content}**: {topics}\n"
+                            await self.send_faq(f"{msg}\n")
                     else:
-                        topics=", ".join(self.faq_table.keys())
+                        topics=", ".join(self.faq_main_topics_table.keys())
                         print (f"... message isn't a valid topic")
-                        await self.send_faq(f"Hi, I'm The Eternal Bot! You're asking for something outside of my expertise!! Or you're just saying hi!\n\nHere are the topics I can respond to!\n\n**[Available Topics]**: {topics}")
+                        await self.send_faq(f"Hi, I'm The Eternal Bot! You're asking for something outside of my expertise!! Or you're just saying hi!\n" +
+                                f"To ask a question, say \"<@{self.client.user.id}> topic\" where topic is one of the below topics.\n" +
+                                f"For the current time in Pacific Time (Los Angelos USA): \"time\".\n" +
+                                f"For this week's event schedule: \"events\".\n"+
+                                f"For the weekly raffle: \"raffle\".\n" + 
+                                f"For current announcments: \"announcements\".\n" +
+                                f"For this week's Conquest event: \"conquest event\"\n" +
+                                f"For a list of Cadre leadership and high leadership: \"contacts\"\n" +
+                                f"For the guild rules: \"guild rules\"\n"
+                                f"Otherwise, I can respond to the following major topics. Each of these may have a list of sub-topics\n\n**[Available Topics]**: {topics}")
                 except:
                     print(f":(")
                     print(traceback.format_exc())
             if not (message.channel == log_channel and self.client.user in message.mentions): 
                 return
             print("got command:", repr(message.content))
-            content = re.sub(r'\<\@\d+\>', '', message.content)
+            content = re.sub(r'\<\@\!\d+\>', '', message.content)
 
             if content.lower().strip()=="update":
                 print("updating schedule.")
@@ -393,7 +441,6 @@ class Bot:
                 next_job = next(jobs, None)
                 await self.send_log(f"Next announcement is at {next_job.next_run}\n" +
                                     f"Text is: {next_job.job_func.args[0]}")
-
 
             elif 'help' in content.lower() or '?' in content:
                 await self.send_log(f"I'm {self.client.user.name}!  I read messages from a google sheet and announce them at the scheduled times.\n" +
