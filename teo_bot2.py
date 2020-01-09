@@ -12,6 +12,7 @@ import json
 import pickle
 import getpass
 import importlib
+from collections import defaultdict
 
 import discord
 from googleapiclient.discovery import build
@@ -37,6 +38,11 @@ if args.logfile:
 
 config_mod = importlib.import_module(re.sub(r'.py$', '', args.config))
 
+faq_sheet = config_mod.faq_sheet
+faq_imp = config_mod.faq_imp
+faq_rep = config_mod.faq_rep
+faq_topic = config_mod.faq_topic
+
 bot_token = config_mod.bot_token  # discord bot token
 google_sheet = config_mod.google_sheet # google sheet file id
 json_creds_file = config_mod.json_creds_file # google app api token
@@ -44,6 +50,7 @@ token_path = config_mod.token_path  # google OAuth user access token
 
 log_channel_guild_name = getattr(config_mod, 'log_channel_guild_name', None)
 log_channel_name = getattr(config_mod, 'log_channel_name', None) # Discord channel for error messages
+help_channel_name = getattr(config_mod, 'help_channel_name', None)
 
 guild_name = config_mod.guild_name # Guild name (Discord server)
 msg_channel_name = config_mod.msg_channel_name 
@@ -95,7 +102,9 @@ day_names =  [
 # Global state variables
 google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly',
                'https://www.googleapis.com/auth/spreadsheets.readonly']
-last_mtime=None # Global for google sheet last modified time
+               
+
+
 
 class FlowEOF(Exception):
     pass
@@ -103,62 +112,67 @@ class FlowEOF(Exception):
 class FlowNotAllowed(Exception):
     pass
 
-# Reads a google sheet and sets the scheduler accordingly
-def read_sheet(allow_flow=False, use_mtime=True, update_mtime=None):
-    if update_mtime is None:
-        update_mtime = use_mtime
-    global last_mtime
-    creds = None
-    if os.path.exists(token_path):
-        with open(token_path, 'rb') as token:
-            creds = pickle.load(token)
-        if not os.access(token_path, os.W_OK):
-            raise Exception(f"I don't have access to write file {token_path}")
-    else:
-        dirname = os.path.dirname(token_path)
-        if dirname == '':
-            dirname = '.'
-        if not os.access(dirname, os.W_OK):
-            raise Exception(f"I don't have access to create file at {token_path}")
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            print("refreshing creds")
-            creds.refresh(Request())
+class SheetReader:
+
+    def __init__ (self, sheet, range):
+        self.sheet=sheet
+        self.range=range
+        self.last_mtime=None
+    
+    # Reads a google sheet and sets the scheduler accordingly
+    def read_sheet(self, allow_flow=False, use_mtime=True, update_mtime=None):
+        if update_mtime is None:
+            update_mtime = use_mtime
+        creds = None
+        if os.path.exists(token_path):
+            with open(token_path, 'rb') as token:
+                creds = pickle.load(token)
+            if not os.access(token_path, os.W_OK):
+                raise Exception(f"I don't have access to write file {token_path}")
         else:
-            if not allow_flow:
-                raise FlowNotAllowed("credentials are invalid, restart the bot and go through the OAuth flow again")
-            print("doing OAuth flow")
-            flow = InstalledAppFlow.from_client_secrets_file(json_creds_file, google_scopes)
-            try:
-                creds=flow.run_console()                
-            except EOFError as e:
-                raise FlowEOF("EOFError while doing OAuth flow.  You need to do this part interactively.\n"
-                              f"try: docker-compose exec teobot /teo_bot2.py --config {args.config} --flow") from e
-        with open(token_path, 'wb') as token:
-            pickle.dump(creds,token)
-    
-    google_sheets = build('sheets', 'v4', credentials=creds)
-    google_drive = build('drive', 'v3', credentials=creds)
+            dirname = os.path.dirname(token_path)
+            if dirname == '':
+                dirname = '.'
+            if not os.access(dirname, os.W_OK):
+                raise Exception(f"I don't have access to create file at {token_path}")
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                print("refreshing creds")
+                creds.refresh(Request())
+            else:
+                if not allow_flow:
+                    raise FlowNotAllowed("credentials are invalid, restart the bot and go through the OAuth flow again")
+                print("doing OAuth flow")
+                flow = InstalledAppFlow.from_client_secrets_file(json_creds_file, google_scopes)
+                try:
+                    creds=flow.run_console()                
+                except EOFError as e:
+                    raise FlowEOF("EOFError while doing OAuth flow.  You need to do this part interactively.\n"
+                                  f"try: docker-compose exec teobot /teo_bot2.py --config {args.config} --flow") from e
+            with open(token_path, 'wb') as token:
+                pickle.dump(creds,token)
+        
+        google_sheets = build('sheets', 'v4', credentials=creds)
+        google_drive = build('drive', 'v3', credentials=creds)
 
-    mtime = google_drive.files().get(fileId=google_sheet, fields="modifiedTime").execute()['modifiedTime']
-    print(f'Read the sheet, mtime = {mtime}')
+        mtime = google_drive.files().get(fileId=self.sheet, fields="modifiedTime").execute()['modifiedTime']
+        print(f'Read the sheet, mtime = {mtime}')
 
-    if use_mtime:
-        if last_mtime == mtime:
-            print(f'Modification time did not change')
-            return None # Don't need to read the sheet and update the scheduler
+        if use_mtime:
+            if self.last_mtime == mtime:
+                print(f'Modification time did not change')
+                return None # Don't need to read the sheet and update the scheduler
 
-    if update_mtime:
-        last_mtime=mtime
-        print(f'Set new sheet modification time as {mtime}')
+        if update_mtime:
+            self.last_mtime=mtime
+            print(f'Set new sheet modification time as {mtime}')
 
-    result = google_sheets.spreadsheets().values().get(spreadsheetId=google_sheet,range="A2:C").execute()
-    lines = result.get('values', [])
-    return lines
+        result = google_sheets.spreadsheets().values().get(spreadsheetId=self.sheet,range=self.range).execute()
+        lines = result.get('values', [])
+        return lines
 
-
-
-    
+faq_reader=SheetReader(faq_sheet, "A2:G")
+announcement_reader=SheetReader(google_sheet, "A2:C")
 
 class ScheduleParseError(Exception):
     pass
@@ -171,17 +185,45 @@ def normalize_day(day):
         raise ScheduleParseError(f"Day String invalid")
     
 
-# Discord Bot cass
+# Discord Bot class
 class Bot:
 
-    async def read_schedule(self, user_initiated=False):
+    async def read_faq(self, user_initiated=False):
+        table=defaultdict(list)
         if user_initiated:
-            lines = read_sheet(use_mtime=False, update_mtime=True)
+            lines = faq_reader.read_sheet(use_mtime=False, update_mtime=True)
         else:
-            lines = read_sheet()
+            lines = faq_reader.read_sheet()
         if lines is None:
             if user_initiated:
-                await self.send_log("Google sheet is unchanged")
+                await self.send_log("FAQ sheet is unchanged")
+            return # Nothing to do, no need to update scheduler.
+        for i,line in enumerate(lines):
+            if len(line) < 7:
+                continue # This is expected in the sheet. Incorrectly formatted lines are simply ignored.
+            topic_str=line[faq_topic].strip()
+            topics=re.split(r",|;", line[faq_topic])
+            if len(topics) < 1:
+                continue # Skipping blank lines
+            text=""
+            if not (line[faq_imp].strip()==""):
+                text=f"**[Repupblic]** {line[faq_rep]} \n**[Imperial]** {line[faq_imp]}"
+            else:
+                text=line[faq_rep]
+            for t in topics:
+                print(f"Adding text {text} to topic {t}")
+                table[t.strip().lower()].append(text)
+        self.faq_table=table
+        
+                    
+    async def read_schedule(self, user_initiated=False):
+        if user_initiated:
+            lines = announcement_reader.read_sheet(use_mtime=False, update_mtime=True)
+        else:
+            lines = announcement_reader.read_sheet()
+        if lines is None:
+            if user_initiated:
+                await self.send_log("Announcement sheet is unchanged")
             return # Nothing to do, no need to update scheduler.
         schedule.clear() # Clear scheduler
 
@@ -243,6 +285,13 @@ class Bot:
             return
         channel=await self.log_channel
         await channel.send(message)
+        
+    async def send_faq(self, message):
+        print ("Sending FAQ Message:", message)
+        if self.help_channel is None:
+            return
+        channel=await self.help_channel
+        await channel.send(message)
 
     # Prints message "message" using Bot bot
     async def print_message(self, message):
@@ -267,6 +316,9 @@ class Bot:
         self.guild = asyncio.ensure_future(self.find_guild(guild_name))
         self.msg_channel = asyncio.ensure_future(self.find_channel(self.guild, msg_channel_name))
         
+        if help_channel_name is not None:
+            self.help_channel = asyncio.ensure_future(self.find_channel(self.guild, help_channel_name))
+        
         if log_channel_name is not None:
             if log_channel_guild_name is None:
                 self.log_guild = self.guild
@@ -283,6 +335,29 @@ class Bot:
             if message.author == self.client.user:
                 return
             log_channel = await self.log_channel
+            help_channel = await self.help_channel
+            if (message.channel == help_channel and self.client.user in message.mentions):
+                print(f"got a message! {message.content}")
+                try:
+                    content = re.sub(r'\<\@\d+\>', '', message.content)
+                    content = content.strip()
+                    content = content.lower()
+                    print(f"what the fuck {content}")
+                    if content in self.faq_table:
+                        print (f"message is a valid topic!")
+                        start=0
+                        for message in self.faq_table[content]:
+                            if start != 0:
+                                await self.send_faq("-----------------------------------\n")
+                            start=start+1
+                            await self.send_faq(f"{message}\n")
+                    else:
+                        topics=", ".join(self.faq_table.keys())
+                        print (f"... message isn't a valid topic")
+                        await self.send_faq(f"Hi, I'm The Eternal Bot! You're asking for something outside of my expertise!! Or you're just saying hi!\n\nHere are the topics I can respond to!\n\n**[Available Topics]**: {topics}")
+                except:
+                    print(f":(")
+                    print(traceback.format_exc())
             if not (message.channel == log_channel and self.client.user in message.mentions): 
                 return
             print("got command:", repr(message.content))
@@ -292,6 +367,7 @@ class Bot:
                 print("updating schedule.")
                 self.last_update = datetime.datetime.now()
                 await self.read_schedule(user_initiated=True)
+                await self.read_faq(user_initiated=True)
 
             elif content.lower().strip()=="dance":
                 dance = ["We can dance if we want to",
@@ -340,6 +416,7 @@ class Bot:
                 self.last_update = now
                 print(f"Updating sheet at {now}\n")
                 await self.read_schedule()
+                await self.read_faq()
             await asyncio.sleep(1)    
 
     def __init__(self):
@@ -355,11 +432,11 @@ def main():
     #print("running as uid", os.getuid(), "i.e.", getpass.getuser())
     
     if args.flow:
-        read_sheet(allow_flow=True, use_mtime=False)
+        announcement_reader.read_sheet(allow_flow=True, use_mtime=False)
         sys.exit(0)
 
     try:
-        read_sheet(allow_flow=True, use_mtime=False)
+        announcement_reader.read_sheet(allow_flow=True, use_mtime=False)
         sys.stdout.flush()
     except FlowEOF as e:
         print()

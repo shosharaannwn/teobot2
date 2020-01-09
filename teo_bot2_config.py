@@ -24,8 +24,8 @@ else:
 token_path="/var/google_sheet_pickle/pickle"
 
 # Discord channel and guild for error messages
-log_channel_guild_name = "TEO_Bot_Test" 
-log_channel_name="prod_admin" 
+log_channel_guild_name = "TEO Leadership" 
+log_channel_name="teo-eternal-bot" 
 
 # Discord channel and guild for announcements
 guild_name="The Eternal Order" 
