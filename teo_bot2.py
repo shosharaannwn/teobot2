@@ -494,7 +494,7 @@ def main():
             print('Trying again...')
             sys.stdout.flush()
             try:
-                read_sheet(use_mtime=False)
+                announcement_reader.read_sheet(use_mtime=False)
             except FlowNotAllowed:
                 pass
             else:
