@@ -22,7 +22,11 @@ else:
     raise Exception("couldn't find google_sheet_credentials")    
 
 #google app clickthrough authorization
-token_path="//var/google_sheet_pickle/pickle"
+if json_creds_file == 'credentials.json':
+    token_path="pickle"
+else:
+    token_path="/var/google_sheet_pickle/pickle"
+
 
 # Discord channel and guild for error messages
 log_channel_guild_name = "TEO Leadership" 

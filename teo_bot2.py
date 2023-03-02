@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import os
 import sys
@@ -46,7 +46,7 @@ faq_topic = config_mod.faq_topic
 bot_token = config_mod.bot_token  # discord bot token
 google_sheet = config_mod.google_sheet # google sheet file id
 json_creds_file = config_mod.json_creds_file # google app api token
-token_path = config_mod.token_path  # google OAuth user access token 
+token_path = config_mod.token_path  # google OAuth user access token
 
 log_channel_guild_name = getattr(config_mod, 'log_channel_guild_name', None)
 log_channel_name = getattr(config_mod, 'log_channel_name', None) # Discord channel for error messages
@@ -54,7 +54,7 @@ help_channel_name = getattr(config_mod, 'help_channel_name', None)
 help_channel_guild_name = getattr(config_mod, 'help_channel_guild_name', None)
 
 guild_name = config_mod.guild_name # Guild name (Discord server)
-msg_channel_name = config_mod.msg_channel_name 
+msg_channel_name = config_mod.msg_channel_name
 
 ################
 
@@ -78,11 +78,11 @@ day_abbrevs = {
     'sunday' : 'sunday',
     'mon' : 'monday',
     'tues' : 'tuesday',
-    'tue' : 'tuesday',    
+    'tue' : 'tuesday',
     'wed' : 'wednesday',
     'thurs' : 'thursday',
     'thur' : 'thursday',
-    'thu' : 'thursday',        
+    'thu' : 'thursday',
     'fri' : 'friday',
     'sat' : 'saturday',
     'sun' : 'sunday',
@@ -108,7 +108,7 @@ time_names = [
 # Global state variables
 google_scopes=['https://www.googleapis.com/auth/drive.metadata.readonly',
                'https://www.googleapis.com/auth/spreadsheets.readonly']
-               
+
 
 
 
@@ -125,7 +125,7 @@ class SheetReader:
         self.range=range
         self.last_mtime=None
         self.multiple_sheets=multiple_sheets
-    
+
     # Reads a google sheet and sets the scheduler accordingly
     def read_sheet(self, allow_flow=False, use_mtime=True, update_mtime=None):
         if update_mtime is None:
@@ -152,13 +152,13 @@ class SheetReader:
                 print("doing OAuth flow")
                 flow = InstalledAppFlow.from_client_secrets_file(json_creds_file, google_scopes)
                 try:
-                    creds=flow.run_console()                
+                    creds=flow.run_local_server()
                 except EOFError as e:
                     raise FlowEOF("EOFError while doing OAuth flow.  You need to do this part interactively.\n"
                                   f"try: docker-compose exec teobot /teo_bot2.py --config {args.config} --flow") from e
             with open(token_path, 'wb') as token:
                 pickle.dump(creds,token)
-        
+
         google_sheets = build('sheets', 'v4', credentials=creds)
         google_drive = build('drive', 'v3', credentials=creds)
 
@@ -177,11 +177,11 @@ class SheetReader:
             for sheet in sheet_data['sheets']:
                 title=sheet['properties']['title']
                # json.dump(sheet,sys.stdout,indent=True)
-               # print() 
+               # print()
                 result = google_sheets.spreadsheets().values().get(spreadsheetId=self.sheet,range=f"'{title}'!{self.range}").execute()
          #       result = sheet.values().get(range=self.range).execute()
                 lines+=result.get('values', [])
-        else:        
+        else:
             result = google_sheets.spreadsheets().values().get(spreadsheetId=self.sheet,range=self.range).execute()
             lines = result.get('values', [])
         return lines
@@ -198,7 +198,7 @@ def normalize_day(day):
         return day_abbrevs[day]
     except KeyError:
         raise ScheduleParseError(f"Day String invalid")
-    
+
 
 # Discord Bot class
 class Bot:
@@ -226,7 +226,7 @@ class Bot:
                 text=f"**[Repupblic]** {line[faq_rep]} \n**[Imperial]** {line[faq_imp]}"
             else:
                 text=line[faq_rep]
-            main_t=topics[0].strip().lower()        
+            main_t=topics[0].strip().lower()
             if len(topics) == 1:
                 table[main_t].append(text)
                 print(f"Adding text {text} to main topic {main_t}")
@@ -237,10 +237,10 @@ class Bot:
                 table[sub_t].append(text)
                 main_topics_table[main_t].add(sub_t)
                 print(f"Adding subtopic {sub_t} to topic {main_t}")
-                
+
         self.faq_table=table
         self.faq_main_topics_table=main_topics_table
-                    
+
     async def read_schedule(self, user_initiated=False):
         if user_initiated:
             lines = announcement_reader.read_sheet(use_mtime=False, update_mtime=True)
@@ -310,7 +310,7 @@ class Bot:
             return
         channel=await self.log_channel
         await channel.send(message)
-        
+
     async def send_faq(self, message):
         print ("Sending FAQ Message:", message)
         if self.help_channel is None:
@@ -340,7 +340,7 @@ class Bot:
 
         self.guild = asyncio.ensure_future(self.find_guild(guild_name))
         self.msg_channel = asyncio.ensure_future(self.find_channel(self.guild, msg_channel_name))
-        
+
         if help_channel_name is not None:
             if help_channel_guild_name is None:
                 self.help_guild = self.guild
@@ -349,7 +349,7 @@ class Bot:
             self.help_channel = asyncio.ensure_future(self.find_channel(self.help_guild, help_channel_name))
         else:
             self.help_channel=None
-        
+
         if log_channel_name is not None:
             if log_channel_guild_name is None:
                 self.log_guild = self.guild
@@ -397,7 +397,7 @@ class Bot:
                                 f"To ask a question, say \"<@{self.client.user.id}> topic\" where topic is one of the below topics.\n" +
                                 f"For the current time in Pacific Time (Los Angelos USA): \"time\".\n" +
                                 f"For this week's event schedule: \"events\".\n"+
-                                f"For the weekly raffle: \"raffle\".\n" + 
+                                f"For the weekly raffle: \"raffle\".\n" +
                                 f"For current announcments: \"announcements\".\n" +
                                 f"For this week's Conquest event: \"conquest event\"\n" +
                                 f"For a list of Cadre leadership and high leadership: \"contacts\"\n" +
@@ -406,7 +406,7 @@ class Bot:
                 except:
                     print(f":(")
                     print(traceback.format_exc())
-            if not (message.channel == log_channel and self.client.user in message.mentions): 
+            if not (message.channel == log_channel and self.client.user in message.mentions):
                 return
             print("got command:", repr(message.content))
             content = re.sub(r'\<\@\!\d+\>', '', message.content)
@@ -464,7 +464,7 @@ class Bot:
                 print(f"Updating sheet at {now}\n")
                 await self.read_schedule()
                 await self.read_faq()
-            await asyncio.sleep(1)    
+            await asyncio.sleep(1)
 
     def __init__(self):
         self.client = discord.Client()
@@ -477,7 +477,7 @@ async def flusher():
 
 def main():
     #print("running as uid", os.getuid(), "i.e.", getpass.getuser())
-    
+
     if args.flow:
         announcement_reader.read_sheet(allow_flow=True, use_mtime=False)
         sys.exit(0)
