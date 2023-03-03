@@ -38,10 +38,10 @@ if args.logfile:
 
 config_mod = importlib.import_module(re.sub(r'.py$', '', args.config))
 
-faq_sheet = config_mod.faq_sheet
-faq_imp = config_mod.faq_imp
-faq_rep = config_mod.faq_rep
-faq_topic = config_mod.faq_topic
+#faq_sheet = config_mod.faq_sheet
+#faq_imp = config_mod.faq_imp
+#faq_rep = config_mod.faq_rep
+#faq_topic = config_mod.faq_topic
 
 bot_token = config_mod.bot_token  # discord bot token
 google_sheet = config_mod.google_sheet # google sheet file id
@@ -186,7 +186,7 @@ class SheetReader:
             lines = result.get('values', [])
         return lines
 
-faq_reader=SheetReader(faq_sheet, "A2:G", True)
+#faq_reader=SheetReader(faq_sheet, "A2:G", True)
 announcement_reader=SheetReader(google_sheet, "A2:C", False)
 
 class ScheduleParseError(Exception):
@@ -203,43 +203,43 @@ def normalize_day(day):
 # Discord Bot class
 class Bot:
 
-    async def read_faq(self, user_initiated=False):
-        table=defaultdict(list) # topic -> [help message]
-        main_topics_table=defaultdict(set) # main topic -> [list of sub topics]
-        if user_initiated:
-            lines = faq_reader.read_sheet(use_mtime=False, update_mtime=True)
-        else:
-            lines = faq_reader.read_sheet()
-        if lines is None:
-            if user_initiated:
-                await self.send_log("FAQ sheet is unchanged")
-            return # Nothing to do, no need to update faq.
-        for i,line in enumerate(lines):
-            if len(line) < 7:
-                continue # This is expected in the sheet. Incorrectly formatted lines are simply ignored.
-            topic_str=line[faq_topic].strip()
-            topics=re.split(":", line[faq_topic])
-            if len(topics) < 1:
-                continue # Skipping blank lines
-            text=""
-            if not (line[faq_imp].strip()==""):
-                text=f"**[Repupblic]** {line[faq_rep]} \n**[Imperial]** {line[faq_imp]}"
-            else:
-                text=line[faq_rep]
-            main_t=topics[0].strip().lower()
-            if len(topics) == 1:
-                table[main_t].append(text)
-                print(f"Adding text {text} to main topic {main_t}")
-                main_topics_table[main_t]
-            else:
-                sub_t=topics[1].strip().lower()
-                print(f"Adding text {text} to topic {sub_t}")
-                table[sub_t].append(text)
-                main_topics_table[main_t].add(sub_t)
-                print(f"Adding subtopic {sub_t} to topic {main_t}")
+    #async def read_faq(self, user_initiated=False):
+     #   table=defaultdict(list) # topic -> [help message]
+      #  main_topics_table=defaultdict(set) # main topic -> [list of sub topics]
+       # if user_initiated:
+        #    lines = faq_reader.read_sheet(use_mtime=False, update_mtime=True)
+        #else:
+        #    lines = faq_reader.read_sheet()
+        #if lines is None:
+        #    if user_initiated:
+        #        await self.send_log("FAQ sheet is unchanged")
+        #    return # Nothing to do, no need to update faq.
+        #for i,line in enumerate(lines):
+         #   if len(line) < 7:
+          #      continue # This is expected in the sheet. Incorrectly formatted lines are simply ignored.
+          #  topic_str=line[faq_topic].strip()
+           # topics=re.split(":", line[faq_topic])
+           # if len(topics) < 1:
+            #    continue # Skipping blank lines
+            #text=""
+            #if not (line[faq_imp].strip()==""):
+            #    text=f"**[Repupblic]** {line[faq_rep]} \n**[Imperial]** {line[faq_imp]}"
+            #else:
+            #    text=line[faq_rep]
+           # main_t=topics[0].strip().lower()
+           # if len(topics) == 1:
+            #    table[main_t].append(text)
+            #    print(f"Adding text {text} to main topic {main_t}")
+            #    main_topics_table[main_t]
+           # else:
+            #    sub_t=topics[1].strip().lower()
+             #   print(f"Adding text {text} to topic {sub_t}")
+              #  table[sub_t].append(text)
+               # main_topics_table[main_t].add(sub_t)
+                #print(f"Adding subtopic {sub_t} to topic {main_t}")
 
-        self.faq_table=table
-        self.faq_main_topics_table=main_topics_table
+        #self.faq_table=table
+        #self.faq_main_topics_table=main_topics_table
 
     async def read_schedule(self, user_initiated=False):
         if user_initiated:
@@ -314,12 +314,12 @@ class Bot:
         channel=await self.log_channel
         await channel.send(message)
 
-    async def send_faq(self, message):
-        print ("Sending FAQ Message:", message)
-        if self.help_channel is None:
-            return
-        channel=await self.help_channel
-        await channel.send(message)
+    #async def send_faq(self, message):
+     #   print ("Sending FAQ Message:", message)
+      #  if self.help_channel is None:
+       #     return
+       # channel=await self.help_channel
+       # await channel.send(message)
 
     # Prints message "message" using Bot bot
     async def print_message(self, message):
@@ -466,7 +466,7 @@ class Bot:
                 self.last_update = now
                 print(f"Updating sheet at {now}\n")
                 await self.read_schedule()
-                await self.read_faq()
+          #      await self.read_faq()
             await asyncio.sleep(1)
 
     def __init__(self):
