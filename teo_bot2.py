@@ -284,7 +284,7 @@ class Bot:
             except ScheduleParseError as e:
                 message = f'Eternal Bot Scheduling Error: Row {i+2}: {e.args[0]}'
                 #traceback.print_exc()
-                print(message)S
+                print(message)
                 await self.send_log(message)
 
         await self.send_log("Schedule updated.")
@@ -367,45 +367,45 @@ class Bot:
             if message.author == self.client.user:
                 return
             log_channel = await self.log_channel
-            help_channel = await self.help_channel
-            if (message.channel == help_channel and self.client.user in message.mentions):
-                print(f"got a message! {message.content}")
-                try:
-                    content = re.sub(r'\<.\d+\>', '', message.content)
-                    content = content.strip()
-                    content = content.lower()
-                    print(f"wtf {content}")
-                    if content == "time":
-                        now=datetime.datetime.now()
-                        await self.send_faq("The current time (Pacific Time USA (PT)) is: "+ now.strftime("%A %B %d, %Y") + " " + now.strftime("%I:%M %p %Z")+"\n")
-                    elif content in self.faq_table:
-                        print (f"message is a valid topic!")
-                        start=0
-                        for msg in self.faq_table[content]:
-                            if start != 0:
-                                await self.send_faq("-----------------------------------\n")
-                            start=start+1
-                            await self.send_faq(f"{msg}\n")
-                        if content in self.faq_main_topics_table:
-                            topics=", ".join(self.faq_main_topics_table[content])
-                            msg=f"-----------------------------\n--------------------------\nThe following sub-topics are available relating to **{content}**: {topics}\n"
-                            await self.send_faq(f"{msg}\n")
-                    else:
-                        topics=", ".join(self.faq_main_topics_table.keys())
-                        print (f"... message isn't a valid topic")
-                        await self.send_faq(f"Hi, I'm The Eternal Bot! You're asking for something outside of my expertise!! Or you're just saying hi!\n" +
-                                f"To ask a question, say \"<@{self.client.user.id}> topic\" where topic is one of the below topics.\n" +
-                                f"For the current time in Pacific Time (Los Angelos USA): \"time\".\n" +
-                                f"For this week's event schedule: \"events\".\n"+
-                                f"For the weekly raffle: \"raffle\".\n" +
-                                f"For current announcments: \"announcements\".\n" +
-                                f"For this week's Conquest event: \"conquest event\"\n" +
-                                f"For a list of Cadre leadership and high leadership: \"contacts\"\n" +
-                                f"For the guild rules: \"guild rules\"\n"
-                                f"Otherwise, I can respond to the following major topics. Each of these may have a list of sub-topics\n\n**[Available Topics]**: {topics}")
-                except:
-                    print(f":(")
-                    print(traceback.format_exc())
+            #help_channel = await self.help_channel
+            # if (message.channel == help_channel and self.client.user in message.mentions):
+            #     print(f"got a message! {message.content}")
+            #     try:
+            #         content = re.sub(r'\<.\d+\>', '', message.content)
+            #         content = content.strip()
+            #         content = content.lower()
+            #         print(f"wtf {content}")
+            #         if content == "time":
+            #             now=datetime.datetime.now()
+            #             await self.send_faq("The current time (Pacific Time USA (PT)) is: "+ now.strftime("%A %B %d, %Y") + " " + now.strftime("%I:%M %p %Z")+"\n")
+            #         elif content in self.faq_table:
+            #             print (f"message is a valid topic!")
+            #             start=0
+            #             for msg in self.faq_table[content]:
+            #                 if start != 0:
+            #                     await self.send_faq("-----------------------------------\n")
+            #                 start=start+1
+            #                 await self.send_faq(f"{msg}\n")
+            #             if content in self.faq_main_topics_table:
+            #                 topics=", ".join(self.faq_main_topics_table[content])
+            #                 msg=f"-----------------------------\n--------------------------\nThe following sub-topics are available relating to **{content}**: {topics}\n"
+            #                 await self.send_faq(f"{msg}\n")
+            #         else:
+            #             topics=", ".join(self.faq_main_topics_table.keys())
+            #             print (f"... message isn't a valid topic")
+            #             await self.send_faq(f"Hi, I'm The Eternal Bot! You're asking for something outside of my expertise!! Or you're just saying hi!\n" +
+            #                     f"To ask a question, say \"<@{self.client.user.id}> topic\" where topic is one of the below topics.\n" +
+            #                     f"For the current time in Pacific Time (Los Angelos USA): \"time\".\n" +
+            #                     f"For this week's event schedule: \"events\".\n"+
+            #                     f"For the weekly raffle: \"raffle\".\n" +
+            #                     f"For current announcments: \"announcements\".\n" +
+            #                     f"For this week's Conquest event: \"conquest event\"\n" +
+            #                     f"For a list of Cadre leadership and high leadership: \"contacts\"\n" +
+            #                     f"For the guild rules: \"guild rules\"\n"
+            #                     f"Otherwise, I can respond to the following major topics. Each of these may have a list of sub-topics\n\n**[Available Topics]**: {topics}")
+            #     except:
+            #         print(f":(")
+            #         print(traceback.format_exc())
             if not (message.channel == log_channel and self.client.user in message.mentions):
                 return
             print("got command:", repr(message.content))
@@ -415,7 +415,7 @@ class Bot:
                 print("updating schedule.")
                 self.last_update = datetime.datetime.now()
                 await self.read_schedule(user_initiated=True)
-                await self.read_faq(user_initiated=True)
+                #await self.read_faq(user_initiated=True)
 
             elif content.lower().strip()=="dance":
                 dance = ["We can dance if we want to",
@@ -428,7 +428,8 @@ class Bot:
                          "Leave the real one far behind,",
                          "And we can dance"]
                 for lyric in dance:
-                    await self.send_log("🎶" + lyric + "🎶")
+                    #await self.send_log("🎶" + lyric + "🎶")
+                    await self.send_log(lyric)
                     await asyncio.sleep(2)
 
             elif content.lower().strip()=="sheet":
