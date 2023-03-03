@@ -291,7 +291,10 @@ class Bot:
 
     async def find_guild(self, name):
         await self.client.wait_until_ready()
+        x=len(self.client.guilds)
+        print("Number of guilds ", x, "\n")
         for guild in self.client.guilds:
+            print ("******* guild "+guild.name)
             if guild.name==name:
                 print("found guild!", guild)
                 return guild
@@ -371,7 +374,7 @@ class Bot:
             if (message.channel == help_channel and self.client.user in message.mentions):
                 print(f"got a message! {message.content}")
                 try:
-                    content = re.sub(r'\<\@\!\d+\>', '', message.content)
+                    content = re.sub(r'\<.\d+\>', '', message.content)
                     content = content.strip()
                     content = content.lower()
                     print(f"wtf {content}")
@@ -409,8 +412,8 @@ class Bot:
             if not (message.channel == log_channel and self.client.user in message.mentions):
                 return
             print("got command:", repr(message.content))
-            content = re.sub(r'\<\@\!\d+\>', '', message.content)
-
+            content = re.sub(r'\<.\d+\>', '', message.content)
+            print("***Stripped command: ", content, "\n")
             if content.lower().strip()=="update":
                 print("updating schedule.")
                 self.last_update = datetime.datetime.now()
@@ -467,7 +470,10 @@ class Bot:
             await asyncio.sleep(1)
 
     def __init__(self):
-        self.client = discord.Client()
+        intents = discord.Intents.default()
+        intents.messages=True
+        intents.guilds=True
+        self.client = discord.Client(intents=intents)
         self.last_update = None
 
 async def flusher():

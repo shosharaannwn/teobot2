@@ -2,7 +2,7 @@ import os
 
 # google sheet file identifier
 google_sheet="1BLIA28zqbCDtin1VhUIB3hCE9swBugn-_6qcaNBpXfw"
-faq_sheet="14A36tKh2zXiqSRbBNT2aUC6I9sqWXXkJtLvqth-3yos"
+#faq_sheet="14A36tKh2zXiqSRbBNT2aUC6I9sqWXXkJtLvqth-3yos"
 
 # Discord bot authorization token
 for fn in ('bot_token', 'bot_token'):
@@ -31,9 +31,9 @@ log_channel_name="prod_admin"
 # Discord channel and guild for announcements
 guild_name="TEO_Bot_Test" 
 msg_channel_name="teo_bot"
-help_channel_name="teobot_help"
+#help_channel_name="teobot_help"
 
 # Indexes into the FAQ sheet for the announcements
-faq_imp=3
-faq_rep=2
-faq_topic=6
+#faq_imp=3
+#faq_rep=2
+#faq_topic=6
