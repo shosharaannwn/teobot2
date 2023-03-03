@@ -24,7 +24,7 @@ else:
 if json_creds_file == 'credentials.json':
     token_path="pickle"
 else:
-    token_path="/var/google_sheet_pickle/pickle"
+    token_path="/var/google_sheet_pickle"
 
 
 # Discord channel and guild for error messages

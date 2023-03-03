@@ -8,9 +8,7 @@ services:
       - bot_token
       - google_sheet_credentials
     volumes:
-      - google_sheet_pickle:/var/google_sheet_pickle
-volumes:
-  google_sheet_pickle:
+      - ./pickle:/var/google_sheet_pickle
 secrets:
   bot_token:
     file: ./bot_token
