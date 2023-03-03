@@ -284,17 +284,14 @@ class Bot:
             except ScheduleParseError as e:
                 message = f'Eternal Bot Scheduling Error: Row {i+2}: {e.args[0]}'
                 #traceback.print_exc()
-                print(message)
+                print(message)S
                 await self.send_log(message)
 
         await self.send_log("Schedule updated.")
 
     async def find_guild(self, name):
         await self.client.wait_until_ready()
-        x=len(self.client.guilds)
-        print("Number of guilds ", x, "\n")
         for guild in self.client.guilds:
-            print ("******* guild "+guild.name)
             if guild.name==name:
                 print("found guild!", guild)
                 return guild
