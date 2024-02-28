@@ -1,4 +1,5 @@
 discord
 aioschedule
 google-api-python-client
-google_auth_oauthlib
+google-auth-httplib2
+google-auth-oauthlib

@@ -29,7 +29,7 @@ Make sure to click "Enable the ... API" for each of those pages.
 
 I don't know where to get this.  Discord or something.
 
-### `gogle_sheet`
+### `google_sheet`
 
 It's the google sheet file id.
 

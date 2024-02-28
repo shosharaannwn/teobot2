@@ -9,11 +9,10 @@ import datetime
 import re
 import asyncio
 import json
-import pickle
 import getpass
 import importlib
 from collections import defaultdict
-from typing import Optional, Any
+from typing import Optional, Any, List
 
 import discord
 from googleapiclient.discovery import build
@@ -123,15 +122,14 @@ class SheetReader:
         self.multiple_sheets=multiple_sheets
 
     # Reads a google sheet and sets the scheduler accordingly
-    def read_sheet(self, allow_flow=False, use_mtime=True, update_mtime=None):
+    def read_sheet(self, allow_flow=False, use_mtime=True, update_mtime=None) -> List[str] | None:
         if update_mtime is None:
             update_mtime = use_mtime
         creds : Optional[Credentials] = None
         if os.path.exists(token_path):
-            with open(token_path, 'rb') as token:
-                creds = pickle.load(token)
             if not os.access(token_path, os.W_OK):
                 raise Exception(f"I don't have access to write file {token_path}")
+            creds = Credentials.from_authorized_user_file(token_path, google_scopes)
         else:
             dirname = os.path.dirname(token_path)
             if dirname == '':
@@ -152,15 +150,15 @@ class SheetReader:
                 except EOFError as e:
                     raise FlowEOF("EOFError while doing OAuth flow.  You need to do this part interactively.\n"
                                   f"try: docker-compose exec teobot /teo_bot2.py --config {args.config} --flow") from e
-            with open(token_path, 'wb') as token:
-                pickle.dump(creds,token)
+            with open(token_path, 'w') as f:
+                f.write(creds.to_json())
 
         google_sheets = build('sheets', 'v4', credentials=creds)
         google_drive = build('drive', 'v3', credentials=creds)
 
         mtime = google_drive.files().get(fileId=self.sheet, fields="modifiedTime").execute()['modifiedTime']
         print(f'Read the sheet, mtime = {mtime}')
-        lines = []
+        lines : List[str] = []
         if use_mtime:
             if self.last_mtime == mtime:
                 print(f'Modification time did not change')
@@ -217,14 +215,14 @@ class Bot:
                 if len(line) < 3:
                     raise ScheduleParseError(f"Row does not have enough columns")
                 message, days, times = line[:3]
-                days=re.sub("\s","", days)
+                days=re.sub(r"\s","", days)
                 if days.lower() == 'skip':
-                    continue;
+                    continue
                 if days.lower() == 'daily':
                     days = set(day_names)
                 else:
                     days = set(map(normalize_day, days.strip().split(',')))
-                times=re.sub("\s","",times)
+                times=re.sub(r"\s","",times)
                 if (re.match("hourly", times, re.IGNORECASE)):
                     times = [f'{h}:00' for h in range(24)]
                 else:
@@ -274,8 +272,8 @@ class Bot:
     # Prints message "message" using Bot bot
     async def print_message(self, message):
         now=datetime.datetime.now()
-        message=re.sub("\{\$TIME\}", now.strftime("%I:%M %p %Z"), message)
-        message=re.sub("\{\$DATE\}", now.strftime("%A %B %d, %Y"), message)
+        message=re.sub(r"\{\$TIME\}", now.strftime("%I:%M %p %Z"), message)
+        message=re.sub(r"\{\$DATE\}", now.strftime("%A %B %d, %Y"), message)
         await self.send(message)
 
 
@@ -389,9 +387,10 @@ def main():
         announcement_reader.read_sheet(allow_flow=True, use_mtime=False)
         sys.exit(0)
 
-    loop = asyncio.get_event_loop()
     bot = Bot()
 
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     run_tasks = asyncio.gather(
         loop.create_task(bot.start()),
         loop.create_task(flusher()),
@@ -399,6 +398,5 @@ def main():
     loop.run_until_complete(run_tasks)
     run_tasks.result()
     raise Exception("infinite loop returned??")
-
 
 main()

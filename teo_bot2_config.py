@@ -18,14 +18,13 @@ for fn in ('credentials.json', '/run/secrets/google_sheet_credentials'):
         json_creds_file = fn
         break
 else:
-    raise Exception("couldn't find google_sheet_credentials")    
+    raise Exception("couldn't find google_sheet_credentials")
 
 #google app clickthrough authorization
 if json_creds_file == 'credentials.json':
-    token_path="pickle"
+    token_path="google_token.json"
 else:
-    token_path="/var/google_sheet_pickle"
-
+    token_path="/var/google_token.json"
 
 # Discord channel and guild for error messages
 log_channel_guild_name = "TEO Leadership" 
